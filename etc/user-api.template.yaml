@@ -7,3 +7,18 @@ Register:
     ReciveType: "register"
     ExpireIn: 600
     RetryAfter: 60
+
+KqConsumerConf:
+  Name: kqConsumer
+  Brokers:
+    - localhost:9092
+  Group: kqConsumer
+  Topic: my-topic
+  Offset: first
+  Consumers: 1
+  Processors: 1
+
+KqPusherConf:
+  Brokers:
+    - localhost:9092
+  Topic: my-topic

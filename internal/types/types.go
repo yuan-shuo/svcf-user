@@ -9,6 +9,12 @@ type SendCodeReq struct {
 }
 
 type SendCodeResp struct {
-	ExpireIn   int `json:"expireIn"`   // 过期时间(秒)
 	RetryAfter int `json:"retryAfter"` // 多少秒后可重发
+}
+
+type VerificationCodeMessage struct {
+	Code      string `json:"code"`      // 验证码
+	Receiver  string `json:"receiver"`  // 接收方（邮箱/手机号）
+	Type      string `json:"type"`      // 验证码类型（注册/登录/重置密码）
+	Timestamp int64  `json:"timestamp"` // 时间戳，用于过期判断
 }

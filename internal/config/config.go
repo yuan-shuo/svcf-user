@@ -3,11 +3,24 @@
 
 package config
 
-import "github.com/zeromicro/go-zero/rest"
+import (
+	"github.com/zeromicro/go-queue/kq"
+	"github.com/zeromicro/go-zero/rest"
+)
 
 type Config struct {
 	Register Register
+
+	KqConsumerConf kq.KqConf // 消息队列消费者配置
+	KqPusherConf   KqPusherConf
+
 	rest.RestConf
+}
+
+// 消息队列生产者配置
+type KqPusherConf struct {
+	Brokers []string
+	Topic   string
 }
 
 // 注册配置

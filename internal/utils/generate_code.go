@@ -3,7 +3,6 @@ package utils
 import (
 	"crypto/rand"
 	"math/big"
-	"strconv"
 )
 
 type CodeConfig struct {
@@ -68,12 +67,12 @@ func GenerateCodeWithConfig(config CodeConfig) (string, error) {
 }
 
 // 常用的快捷方法
-func GenerateDigitCode(length int) (int, error) {
+func GenerateDigitCode(length int) string {
 	code, _ := GenerateCodeWithConfig(CodeConfig{
 		Length:     length,
 		UseNumbers: true,
 	})
-	return strconv.Atoi(code)
+	return code
 }
 
 func GenerateMixedCode(length int) string {
