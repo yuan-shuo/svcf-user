@@ -41,7 +41,7 @@ func main() {
 	for _, mq := range mqs.Consumers(c, ctx, svcCtx) {
 		serviceGroup.Add(mq)
 	}
-	fmt.Printf("Starting MQ consumer...")
+	fmt.Printf("Starting MQ consumer...\n")
 	go serviceGroup.Start()
 
 	fmt.Printf("Starting server at %s:%d...\n", c.Host, c.Port)

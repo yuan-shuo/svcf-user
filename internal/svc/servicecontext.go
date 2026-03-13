@@ -5,13 +5,16 @@ package svc
 
 import (
 	"user/internal/config"
+	"user/internal/db"
 
 	"github.com/zeromicro/go-queue/kq"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 type ServiceContext struct {
 	Config         config.Config
 	KqPusherClient *kq.Pusher
+	Redis          *redis.Redis
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -22,5 +25,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			c.KqPusherConf.Topic,
 			kq.WithAllowAutoTopicCreation(),
 		),
+		Redis: db.NewRedis(c.RedisConfig),
 	}
 }

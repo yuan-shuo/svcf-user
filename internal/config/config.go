@@ -5,6 +5,7 @@ package config
 
 import (
 	"github.com/zeromicro/go-queue/kq"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/rest"
 )
 
@@ -14,6 +15,8 @@ type Config struct {
 	KqConsumerConf kq.KqConf // 消息队列消费者配置
 	KqPusherConf   KqPusherConf
 	SmtpConfig     SmtpConfig
+
+	RedisConfig redis.RedisConf // redis配置
 
 	rest.RestConf
 }
@@ -31,9 +34,10 @@ type Register struct {
 
 // 验证码发送配置
 type SendCodeConfig struct {
-	ReciveType string // 接收验证码类型
-	ExpireIn   int
-	RetryAfter int
+	ReceiveType    string // 接收验证码类型
+	ExpireIn       int
+	RetryAfter     int
+	RedisKeyPrefix string // 存放于redis时使用的键名前缀, 给入a则redis.key=a:receiver_email
 }
 
 // 邮件发送配置

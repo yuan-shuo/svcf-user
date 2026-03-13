@@ -4,9 +4,10 @@ Port: 8888
 
 Register:
   SendCodeConfig:
-    ReciveType: "register"
-    ExpireIn: 600
+    ReceiveType: "register"
+    ExpireIn: 300
     RetryAfter: 60
+    RedisKeyPrefix: "account"
 
 KqConsumerConf:
   Name: kqConsumer
@@ -22,3 +23,17 @@ KqPusherConf:
   Brokers:
     - localhost:9092
   Topic: my-topic
+
+SmtpConfig:
+  Host: localhost
+  Port: 1025
+  Username: ""
+  Password: ""
+  From: noreply@test.com
+
+RedisConfig:
+  Host: "localhost:6379"
+  Type: node
+  Tls: false
+  NonBlock: true
+  PingTimeout: 1s
