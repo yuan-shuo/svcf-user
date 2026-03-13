@@ -14,7 +14,7 @@ type SendCodeResp struct {
 
 type VerificationCodeMessage struct {
 	Code      string `json:"code"`      // 验证码
-	Receiver  string `json:"receiver"`  // 接收方（邮箱/手机号）
+	Receiver  string `json:"receiver"`  // 接收方邮箱
 	Type      string `json:"type"`      // 验证码类型（注册/登录/重置密码）
 	Timestamp int64  `json:"timestamp"` // 时间戳，用于过期判断
 }

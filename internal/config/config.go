@@ -13,6 +13,7 @@ type Config struct {
 
 	KqConsumerConf kq.KqConf // 消息队列消费者配置
 	KqPusherConf   KqPusherConf
+	SmtpConfig     SmtpConfig
 
 	rest.RestConf
 }
@@ -33,4 +34,13 @@ type SendCodeConfig struct {
 	ReciveType string // 接收验证码类型
 	ExpireIn   int
 	RetryAfter int
+}
+
+// 邮件发送配置
+type SmtpConfig struct {
+	Host     string
+	Port     int
+	Username string
+	Password string
+	From     string
 }
