@@ -3,6 +3,7 @@ module user
 go 1.25.5
 
 require (
+	github.com/wneessen/go-mail v0.7.2
 	github.com/zeromicro/go-queue v1.2.2
 	github.com/zeromicro/go-zero v1.10.0
 )
@@ -32,7 +33,6 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/segmentio/kafka-go v0.4.47 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/wneessen/go-mail v0.7.2 // indirect
 	go.opentelemetry.io/otel v1.24.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0 // indirect
