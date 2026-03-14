@@ -129,3 +129,119 @@ func TestSendRegisterCodeLogic_cleanupRedisData(t *testing.T) {
 		assert.True(t, exists2, "第二个邮箱的验证码应该仍然存在")
 	})
 }
+
+func TestSendRegisterCodeLogic_buildBaseKey(t *testing.T) {
+	logic, s := newTestSendRegisterCodeLogic(t, nil)
+	defer s.Close()
+
+	t.Run("正确构建基础key", func(t *testing.T) {
+		baseKey := logic.buildBaseKey()
+		expected := "register:code:email"
+		assert.Equal(t, expected, baseKey)
+	})
+}
+
+func TestSendRegisterCodeLogic_buildVerifyKey(t *testing.T) {
+	logic, s := newTestSendRegisterCodeLogic(t, nil)
+	defer s.Close()
+
+	t.Run("正确构建验证码key", func(t *testing.T) {
+		email := "test@example.com"
+		verifyKey := logic.buildVerifyKey(email)
+		expected := "register:code:email:verify:test@example.com"
+		assert.Equal(t, expected, verifyKey)
+	})
+
+	t.Run("处理特殊字符邮箱", func(t *testing.T) {
+		email := "user+tag@example.com"
+		verifyKey := logic.buildVerifyKey(email)
+		expected := "register:code:email:verify:user+tag@example.com"
+		assert.Equal(t, expected, verifyKey)
+	})
+}
+
+func TestSendRegisterCodeLogic_buildLimitKey(t *testing.T) {
+	logic, s := newTestSendRegisterCodeLogic(t, nil)
+	defer s.Close()
+
+	t.Run("正确构建限流key", func(t *testing.T) {
+		email := "test@example.com"
+		limitKey := logic.buildLimitKey(email)
+		expected := "register:code:email:limit:test@example.com"
+		assert.Equal(t, expected, limitKey)
+	})
+}
+
+func TestSendRegisterCodeLogic_cleanupRateLimit(t *testing.T) {
+	logic, s := newTestSendRegisterCodeLogic(t, nil)
+	defer s.Close()
+
+	ctx := context.Background()
+	email := "test@example.com"
+
+	t.Run("成功删除存在的限流数据", func(t *testing.T) {
+		// 先设置一个限流数据
+		limitKey := logic.buildLimitKey(email)
+		err := logic.svcCtx.Redis.SetCtx(ctx, limitKey, "1")
+		require.NoError(t, err)
+
+		// 验证数据存在
+		exists, err := logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
+		require.NoError(t, err)
+		assert.True(t, exists)
+
+		// 调用清理函数
+		logic.cleanupRateLimit(email)
+
+		// 验证数据已被删除
+		exists, err = logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
+		require.NoError(t, err)
+		assert.False(t, exists, "限流数据应该被删除")
+	})
+
+	t.Run("删除不存在的key不报错", func(t *testing.T) {
+		// 确保key不存在
+		nonExistentEmail := "nonexistent@example.com"
+		limitKey := logic.buildLimitKey(nonExistentEmail)
+
+		exists, err := logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
+		require.NoError(t, err)
+		assert.False(t, exists)
+
+		// 调用清理函数，不应该报错
+		logic.cleanupRateLimit(nonExistentEmail)
+
+		// 验证key仍然不存在
+		exists, err = logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+
+	t.Run("只删除指定邮箱的限流数据", func(t *testing.T) {
+		// 设置两个不同邮箱的限流数据
+		email1 := "user1@example.com"
+		email2 := "user2@example.com"
+		limitKey1 := logic.buildLimitKey(email1)
+		limitKey2 := logic.buildLimitKey(email2)
+
+		err := logic.svcCtx.Redis.SetCtx(ctx, limitKey1, "1")
+		require.NoError(t, err)
+		err = logic.svcCtx.Redis.SetCtx(ctx, limitKey2, "1")
+		require.NoError(t, err)
+
+		// 验证两个key都存在
+		exists1, _ := logic.svcCtx.Redis.ExistsCtx(ctx, limitKey1)
+		exists2, _ := logic.svcCtx.Redis.ExistsCtx(ctx, limitKey2)
+		assert.True(t, exists1)
+		assert.True(t, exists2)
+
+		// 只删除第一个邮箱的数据
+		logic.cleanupRateLimit(email1)
+
+		// 验证第一个key被删除，第二个key仍然存在
+		exists1, _ = logic.svcCtx.Redis.ExistsCtx(ctx, limitKey1)
+		exists2, _ = logic.svcCtx.Redis.ExistsCtx(ctx, limitKey2)
+		assert.False(t, exists1, "第一个邮箱的限流数据应该被删除")
+		assert.True(t, exists2, "第二个邮箱的限流数据应该仍然存在")
+	})
+}
