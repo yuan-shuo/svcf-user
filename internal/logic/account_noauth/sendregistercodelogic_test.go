@@ -2,6 +2,8 @@ package account_noauth
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -11,6 +13,7 @@ import (
 
 	"user/internal/config"
 	"user/internal/svc"
+	"user/internal/types"
 )
 
 // setupTestRedis 创建测试用的 Redis 实例
@@ -243,5 +246,163 @@ func TestSendRegisterCodeLogic_cleanupRateLimit(t *testing.T) {
 		exists2, _ = logic.svcCtx.Redis.ExistsCtx(ctx, limitKey2)
 		assert.False(t, exists1, "第一个邮箱的限流数据应该被删除")
 		assert.True(t, exists2, "第二个邮箱的限流数据应该仍然存在")
+	})
+}
+
+// mockKqPusherClient 用于测试的 MQ 推送客户端 mock
+type mockKqPusherClient struct {
+	pushFunc func(ctx context.Context, v string) error
+	messages []string
+}
+
+func (m *mockKqPusherClient) Push(ctx context.Context, v string) error {
+	m.messages = append(m.messages, v)
+	if m.pushFunc != nil {
+		return m.pushFunc(ctx, v)
+	}
+	return nil
+}
+
+func (m *mockKqPusherClient) Close() error {
+	return nil
+}
+
+// newTestSendRegisterCodeLogicWithMockMQ 创建带 mock MQ 的测试逻辑
+func newTestSendRegisterCodeLogicWithMockMQ(t *testing.T, mockClient *mockKqPusherClient) (*SendRegisterCodeLogic, *miniredis.Miniredis) {
+	s := miniredis.RunT(t)
+	conf := redis.RedisConf{
+		Host: s.Addr(),
+		Type: "node",
+	}
+	r := redis.MustNewRedis(conf)
+
+	ctx := context.Background()
+	svcCtx := &svc.ServiceContext{
+		Config: config.Config{
+			Register: config.Register{
+				SendCodeConfig: config.SendCodeConfig{
+					ReceiveType:    "email",
+					ExpireIn:       300,
+					RetryAfter:     60,
+					RedisKeyPrefix: "register:code",
+				},
+			},
+		},
+		Redis:          r,
+		KqPusherClient: mockClient,
+	}
+
+	logic := NewSendRegisterCodeLogic(ctx, svcCtx)
+	return logic, s
+}
+
+func TestSendRegisterCodeLogic_sendToMQ(t *testing.T) {
+	t.Run("成功发送消息到MQ", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{}
+		logic, s := newTestSendRegisterCodeLogicWithMockMQ(t, mockClient)
+		defer s.Close()
+
+		email := "test@example.com"
+		code := "123456"
+
+		err := logic.sendToMQ(email, code)
+		require.NoError(t, err)
+
+		// 验证消息已发送
+		require.Len(t, mockClient.messages, 1)
+
+		// 验证消息内容
+		var msg types.VerificationCodeMessage
+		err = json.Unmarshal([]byte(mockClient.messages[0]), &msg)
+		require.NoError(t, err)
+		assert.Equal(t, code, msg.Code)
+		assert.Equal(t, email, msg.Receiver)
+		assert.Equal(t, "email", msg.Type)
+		assert.Greater(t, msg.Timestamp, int64(0))
+	})
+
+	t.Run("MQ推送失败返回错误", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{
+			pushFunc: func(ctx context.Context, v string) error {
+				return errors.New("mq connection failed")
+			},
+		}
+		logic, s := newTestSendRegisterCodeLogicWithMockMQ(t, mockClient)
+		defer s.Close()
+
+		email := "test@example.com"
+		code := "123456"
+
+		err := logic.sendToMQ(email, code)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "消息队列推送失败")
+	})
+
+	t.Run("验证消息格式正确", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{}
+		logic, s := newTestSendRegisterCodeLogicWithMockMQ(t, mockClient)
+		defer s.Close()
+
+		email := "user@example.com"
+		code := "654321"
+
+		err := logic.sendToMQ(email, code)
+		require.NoError(t, err)
+
+		// 解析并验证 JSON 格式
+		var msg types.VerificationCodeMessage
+		err = json.Unmarshal([]byte(mockClient.messages[0]), &msg)
+		require.NoError(t, err)
+
+		// 验证所有字段
+		assert.Equal(t, code, msg.Code)
+		assert.Equal(t, email, msg.Receiver)
+		assert.Equal(t, "email", msg.Type)
+		assert.NotZero(t, msg.Timestamp)
+	})
+}
+
+func TestSendRegisterCodeLogic_buildResponse(t *testing.T) {
+	t.Run("正确构建响应", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		resp := logic.buildResponse()
+
+		require.NotNil(t, resp)
+		assert.Equal(t, 60, resp.RetryAfter)
+	})
+
+	t.Run("响应包含正确的配置值", func(t *testing.T) {
+		// 创建不同配置的 logic
+		s := miniredis.RunT(t)
+		defer s.Close()
+
+		conf := redis.RedisConf{
+			Host: s.Addr(),
+			Type: "node",
+		}
+		r := redis.MustNewRedis(conf)
+
+		ctx := context.Background()
+		svcCtx := &svc.ServiceContext{
+			Config: config.Config{
+				Register: config.Register{
+					SendCodeConfig: config.SendCodeConfig{
+						ReceiveType:    "email",
+						ExpireIn:       300,
+						RetryAfter:     120, // 不同的重试时间
+						RedisKeyPrefix: "register:code",
+					},
+				},
+			},
+			Redis: r,
+		}
+
+		logic := NewSendRegisterCodeLogic(ctx, svcCtx)
+		resp := logic.buildResponse()
+
+		require.NotNil(t, resp)
+		assert.Equal(t, 120, resp.RetryAfter)
 	})
 }
