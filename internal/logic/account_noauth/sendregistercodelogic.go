@@ -94,24 +94,9 @@ func (l *SendRegisterCodeLogic) validateEmail(email string) error {
 		return fmt.Errorf("邮箱验证失败: %w", err)
 	}
 
-	// 3. 语法验证
+	// 3. 根据业务需求检查结果
 	if !ret.Syntax.Valid {
 		return fmt.Errorf("邮箱格式无效")
-	}
-
-	// 4. MX 记录检查（确保域名存在且能接收邮件）
-	if !ret.HasMxRecords {
-		return fmt.Errorf("域名不存在或无法接收邮件")
-	}
-
-	// 5. 可选：临时邮箱检查（防止恶意注册）
-	if ret.Disposable {
-		return fmt.Errorf("不支持使用临时邮箱")
-	}
-
-	// 6. 可选：角色账号检查（防止用 admin@, info@ 等）
-	if ret.RoleAccount {
-		return fmt.Errorf("请使用个人邮箱")
 	}
 
 	return nil
