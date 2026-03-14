@@ -530,3 +530,191 @@ func TestSendRegisterCodeLogic_saveCodeToRedis(t *testing.T) {
 		assert.Equal(t, "CODE22", savedCode2)
 	})
 }
+
+func TestSendRegisterCodeLogic_checkRateLimit(t *testing.T) {
+	t.Run("首次检查通过", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		email := "test@example.com"
+
+		err := logic.checkRateLimit(email)
+		require.NoError(t, err, "首次检查应该通过")
+	})
+
+	t.Run("检查通过后设置限流key", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		ctx := context.Background()
+		email := "test@example.com"
+		limitKey := logic.buildLimitKey(email)
+
+		// 检查限流前key不存在
+		exists, _ := logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
+		assert.False(t, exists, "检查前key不应该存在")
+
+		// 执行限流检查
+		err := logic.checkRateLimit(email)
+		require.NoError(t, err)
+
+		// 验证key已设置
+		exists, _ = logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
+		assert.True(t, exists, "检查后key应该存在")
+	})
+
+	t.Run("限流key有过期时间", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		email := "test@example.com"
+		limitKey := logic.buildLimitKey(email)
+
+		// 执行限流检查
+		err := logic.checkRateLimit(email)
+		require.NoError(t, err)
+
+		// 验证有过期时间
+		ttl := s.TTL(limitKey)
+		assert.True(t, ttl > 0, "限流key应该有过期时间")
+		assert.True(t, ttl <= 60*time.Second, "过期时间应该不超过配置的60秒")
+	})
+
+	t.Run("短时间内重复检查返回错误", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		email := "test@example.com"
+
+		// 首次检查通过
+		err := logic.checkRateLimit(email)
+		require.NoError(t, err)
+
+		// 短时间内再次检查应该失败
+		err = logic.checkRateLimit(email)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "发送过于频繁")
+	})
+
+	t.Run("错误信息包含剩余时间", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		email := "test@example.com"
+
+		// 首次检查通过
+		err := logic.checkRateLimit(email)
+		require.NoError(t, err)
+
+		// 快进时间10秒
+		s.FastForward(10 * time.Second)
+
+		// 再次检查应该失败，并包含剩余时间
+		err = logic.checkRateLimit(email)
+		require.Error(t, err)
+		// 剩余时间应该在50秒左右（60-10=50）
+		assert.Contains(t, err.Error(), "50")
+	})
+
+	t.Run("过期后可以再次发送", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		email := "test@example.com"
+
+		// 首次检查通过
+		err := logic.checkRateLimit(email)
+		require.NoError(t, err)
+
+		// 快进时间超过限流时间（60秒）
+		s.FastForward(61 * time.Second)
+
+		// 再次检查应该通过
+		err = logic.checkRateLimit(email)
+		require.NoError(t, err, "限流过期后应该可以再次发送")
+	})
+
+	t.Run("不同邮箱互不影响", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		email1 := "user1@example.com"
+		email2 := "user2@example.com"
+
+		// 第一个邮箱检查通过
+		err := logic.checkRateLimit(email1)
+		require.NoError(t, err)
+
+		// 第二个邮箱也应该能通过
+		err = logic.checkRateLimit(email2)
+		require.NoError(t, err, "不同邮箱的限流应该互不影响")
+	})
+}
+
+func TestSendRegisterCodeLogic_validateRequest(t *testing.T) {
+	t.Run("请求为nil返回错误", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		err := logic.validateRequest(nil)
+		require.Error(t, err)
+		assert.Equal(t, "请求不能为空", err.Error())
+	})
+
+	t.Run("有效的请求通过验证", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		req := &types.SendCodeReq{
+			Email: "test@example.com",
+			Type:  "email",
+		}
+
+		err := logic.validateRequest(req)
+		require.NoError(t, err)
+	})
+
+	t.Run("请求类型不匹配返回错误", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		req := &types.SendCodeReq{
+			Email: "test@example.com",
+			Type:  "sms", // 配置的是 email
+		}
+
+		err := logic.validateRequest(req)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "无效的验证码请求类型")
+		assert.Contains(t, err.Error(), "sms")
+	})
+
+	t.Run("空的请求类型返回错误", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		req := &types.SendCodeReq{
+			Email: "test@example.com",
+			Type:  "",
+		}
+
+		err := logic.validateRequest(req)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "无效的验证码请求类型")
+	})
+
+	t.Run("大小写敏感的类型验证", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		// 配置是 "email"，但传入 "Email"
+		req := &types.SendCodeReq{
+			Email: "test@example.com",
+			Type:  "Email",
+		}
+
+		err := logic.validateRequest(req)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "无效的验证码请求类型")
+	})
+}
