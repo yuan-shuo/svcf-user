@@ -1,0 +1,1 @@
+go test ./internal/mqs/sendemail --cover
