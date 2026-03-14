@@ -1,3 +1,9 @@
+# svcf-user
+
+[![CI](https://github.com/yuan-shuo/svcf-user/workflows/CI/badge.svg)](https://github.com/yuan-shuo/svcf-user/actions)
+
+service frame of user: 用户微服务框架
+
 ## redis 键命名
 
 ```go
