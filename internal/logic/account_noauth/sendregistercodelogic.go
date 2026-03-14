@@ -71,12 +71,12 @@ func (l *SendRegisterCodeLogic) validateRequest(req *types.SendCodeReq) error {
 	if req == nil {
 		return fmt.Errorf("请求不能为空")
 	}
+	if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
+		return fmt.Errorf("无效的验证码请求类型: %s", req.Type)
+	}
 	// 邮箱验证子模块
 	if err := l.validateEmail(req.Email); err != nil {
 		return err
-	}
-	if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
-		return fmt.Errorf("无效的验证码类型: %s", req.Type)
 	}
 	return nil
 }

@@ -4,6 +4,7 @@
 package svc
 
 import (
+	"context"
 	"user/internal/config"
 	"user/internal/db"
 
@@ -13,8 +14,14 @@ import (
 
 type ServiceContext struct {
 	Config         config.Config
-	KqPusherClient *kq.Pusher
+	KqPusherClient KqPusherClient
 	Redis          *redis.Redis
+}
+
+// 定义为接口方便单元测试
+type KqPusherClient interface {
+	Push(ctx context.Context, v string) error
+	Close() error
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
