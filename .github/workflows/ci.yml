@@ -42,4 +42,6 @@ jobs:
         go test ./internal/utils/... \
                 ./internal/logic/... \
                 ./internal/mqs/... \
-                -race -cover
+                -race \
+                -cover \
+                -tags=unit
