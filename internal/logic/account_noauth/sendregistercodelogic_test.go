@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
@@ -404,5 +405,128 @@ func TestSendRegisterCodeLogic_buildResponse(t *testing.T) {
 
 		require.NotNil(t, resp)
 		assert.Equal(t, 120, resp.RetryAfter)
+	})
+}
+
+func TestSendRegisterCodeLogic_generateCode(t *testing.T) {
+	t.Run("生成的验证码长度为6位", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		code := logic.generateCode()
+		assert.Equal(t, 6, len(code), "验证码长度应该为6位")
+	})
+
+	t.Run("生成的验证码只包含数字和大写字母", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		code := logic.generateCode()
+		for _, ch := range code {
+			assert.True(t,
+				(ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z'),
+				"验证码字符必须是数字或大写字母，实际字符: %c", ch)
+		}
+	})
+
+	t.Run("多次生成的验证码不相同", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		codes := make(map[string]bool)
+		for i := 0; i < 10; i++ {
+			code := logic.generateCode()
+			codes[code] = true
+		}
+		// 虽然理论上可能重复，但10次生成10个不同验证码的概率极高
+		assert.GreaterOrEqual(t, len(codes), 8, "10次生成应该产生至少8个不同的验证码")
+	})
+}
+
+func TestSendRegisterCodeLogic_saveCodeToRedis(t *testing.T) {
+	t.Run("成功保存验证码到Redis", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		ctx := context.Background()
+		email := "test@example.com"
+		code := "123456"
+
+		err := logic.saveCodeToRedis(email, code)
+		require.NoError(t, err)
+
+		// 验证数据已保存
+		redisKey := logic.buildVerifyKey(email)
+		savedCode, err := logic.svcCtx.Redis.HgetCtx(ctx, redisKey, "code")
+		require.NoError(t, err)
+		assert.Equal(t, code, savedCode)
+
+		savedUsed, err := logic.svcCtx.Redis.HgetCtx(ctx, redisKey, "used")
+		require.NoError(t, err)
+		assert.Equal(t, "0", savedUsed)
+	})
+
+	t.Run("保存的验证码有过期时间", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		email := "test@example.com"
+		code := "123456"
+
+		err := logic.saveCodeToRedis(email, code)
+		require.NoError(t, err)
+
+		// 验证有过期时间（使用 miniredis 检查 TTL）
+		redisKey := logic.buildVerifyKey(email)
+		ttl := s.TTL(redisKey)
+		assert.True(t, ttl > 0, "验证码应该设置过期时间")
+		assert.True(t, ttl <= 300*time.Second, "过期时间应该不超过配置的300秒")
+	})
+
+	t.Run("覆盖已存在的验证码", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		ctx := context.Background()
+		email := "test@example.com"
+
+		// 先保存旧验证码
+		err := logic.saveCodeToRedis(email, "OLD123")
+		require.NoError(t, err)
+
+		// 保存新验证码
+		err = logic.saveCodeToRedis(email, "NEW456")
+		require.NoError(t, err)
+
+		// 验证新验证码已覆盖旧验证码
+		redisKey := logic.buildVerifyKey(email)
+		savedCode, err := logic.svcCtx.Redis.HgetCtx(ctx, redisKey, "code")
+		require.NoError(t, err)
+		assert.Equal(t, "NEW456", savedCode)
+	})
+
+	t.Run("不同邮箱的验证码相互独立", func(t *testing.T) {
+		logic, s := newTestSendRegisterCodeLogic(t, nil)
+		defer s.Close()
+
+		ctx := context.Background()
+		email1 := "user1@example.com"
+		email2 := "user2@example.com"
+
+		// 为两个邮箱保存不同的验证码
+		err := logic.saveCodeToRedis(email1, "CODE11")
+		require.NoError(t, err)
+		err = logic.saveCodeToRedis(email2, "CODE22")
+		require.NoError(t, err)
+
+		// 验证各自的验证码正确
+		redisKey1 := logic.buildVerifyKey(email1)
+		redisKey2 := logic.buildVerifyKey(email2)
+
+		savedCode1, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey1, "code")
+		savedCode2, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey2, "code")
+
+		assert.Equal(t, "CODE11", savedCode1)
+		assert.Equal(t, "CODE22", savedCode2)
 	})
 }
