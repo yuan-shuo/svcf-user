@@ -1,6 +1,8 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
+// validateEmail 未实现
+
 package account_noauth
 
 import (
@@ -13,7 +15,6 @@ import (
 	"user/internal/types"
 	"user/internal/utils"
 
-	emailverifier "github.com/AfterShip/email-verifier"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -31,30 +32,37 @@ func NewSendRegisterCodeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 	}
 }
 
-var emailVerifier = emailverifier.NewVerifier()
-
 func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *types.SendCodeResp, err error) {
-	// 1. 验证请求
+	// 验证请求
 	if err := l.validateRequest(req); err != nil {
 		return nil, err
 	}
 
-	// 2. 检查限流
+	// 26-03-14: 这个邮箱验证需要配合用户模型，同时还需要控制验证力度，后续构建
+	// // 邮箱验证子模块
+	// if err := l.validateEmail(req.Email); err != nil {
+	// 	return nil, err
+	// }
+
+	// 检查限流
 	if err := l.checkRateLimit(req.Email); err != nil {
 		return nil, err
 	}
 
-	// 3. 生成验证码
+	// 清理未使用的验证码
+	l.cleanupRedisData(req.Email)
+
+	// 生成验证码
 	code := l.generateCode()
 
-	// 4. 保存到 Redis
+	// 保存到 Redis
 	if err := l.saveCodeToRedis(req.Email, code); err != nil {
 		// 如果保存失败，清理限流键
 		l.cleanupRateLimit(req.Email)
 		return nil, err
 	}
 
-	// 5. 发送到消息队列
+	// 发送到消息队列
 	if err := l.sendToMQ(req.Email, code); err != nil {
 		// 如果发送失败，清理 Redis 数据
 		l.cleanupRedisData(req.Email)
@@ -62,7 +70,7 @@ func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *
 		return nil, err
 	}
 
-	// 6. 返回响应
+	// 返回响应
 	return l.buildResponse(), nil
 }
 
@@ -74,56 +82,33 @@ func (l *SendRegisterCodeLogic) validateRequest(req *types.SendCodeReq) error {
 	if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
 		return fmt.Errorf("无效的验证码请求类型: %s", req.Type)
 	}
-	// 邮箱验证子模块
-	if err := l.validateEmail(req.Email); err != nil {
-		return err
-	}
-	return nil
-}
-
-// 邮箱验证子模块
-func (l *SendRegisterCodeLogic) validateEmail(email string) error {
-	// 1. 基础非空检查
-	if email == "" {
-		return fmt.Errorf("邮箱不能为空")
-	}
-
-	// 2. 使用 email-verifier 进行完整验证
-	ret, err := emailVerifier.Verify(email)
-	if err != nil {
-		return fmt.Errorf("邮箱验证失败: %w", err)
-	}
-
-	// 3. 根据业务需求检查结果
-	if !ret.Syntax.Valid {
-		return fmt.Errorf("邮箱格式无效")
-	}
-
 	return nil
 }
 
 // 2. 限流检查模块
 func (l *SendRegisterCodeLogic) checkRateLimit(email string) error {
 	limitKey := l.buildLimitKey(email)
+	retryAfter := l.svcCtx.Config.Register.SendCodeConfig.RetryAfter
 
-	ttl, err := l.svcCtx.Redis.Ttl(limitKey)
+	// SET key value NX EX seconds：只有key不存在时才设置，并设置过期时间
+	// 这是一个原子操作，Redis保证不会被打断
+	ok, err := l.svcCtx.Redis.SetnxExCtx(l.ctx, limitKey, "1", retryAfter)
 	if err != nil {
-		return fmt.Errorf("检查发送频率失败: %w", err)
+		return fmt.Errorf("限流检查失败: %w", err)
 	}
-	if ttl > 0 {
+
+	if !ok {
+		// key已存在，获取剩余时间
+		ttl, _ := l.svcCtx.Redis.Ttl(limitKey)
 		return fmt.Errorf("发送过于频繁，请%d秒后重试", ttl)
 	}
 
-	// 设置限流
-	if err := l.svcCtx.Redis.SetexCtx(l.ctx, limitKey, "1", l.svcCtx.Config.Register.SendCodeConfig.RetryAfter); err != nil {
-		return fmt.Errorf("设置限流失败: %w", err)
-	}
-	return nil
+	return nil // 设置成功，可以发送
 }
 
 // 3. 验证码生成模块
 func (l *SendRegisterCodeLogic) generateCode() string {
-	return utils.GenerateDigitCode(6)
+	return utils.GenerateMixedCode(6)
 }
 
 // 4. Redis 存储模块
