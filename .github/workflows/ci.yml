@@ -35,4 +35,4 @@ jobs:
                 ./internal/logic/... \
                 ./internal/db/... \
                 ./internal/mqs/... \
-                -v -race -cover
+                -race -cover
