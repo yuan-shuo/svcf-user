@@ -1,4 +1,5 @@
 go test ./internal/utils/... `
         ./internal/logic/... `
         ./internal/mqs/... `
-        -cover
+        -cover `
+        -tags=unit
