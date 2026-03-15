@@ -8,6 +8,7 @@ require (
 	github.com/wneessen/go-mail v0.7.2
 	github.com/zeromicro/go-queue v1.2.2
 	github.com/zeromicro/go-zero v1.10.0
+	golang.org/x/crypto v0.41.0
 )
 
 require (
