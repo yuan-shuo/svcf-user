@@ -1,6 +1,8 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
+// validateEmail 未实现
+
 package account_noauth
 
 import (
@@ -31,67 +33,154 @@ func NewSendRegisterCodeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *types.SendCodeResp, err error) {
-	// todo: add your logic here and delete this line
-
-	// 判断验证码类型是否为注册验证码
-	if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
-		return nil, fmt.Errorf("无效的验证码类型: %s", req.Type)
+	// 验证请求
+	if err := l.validateRequest(req); err != nil {
+		return nil, err
 	}
+
+	// 26-03-14: 这个邮箱验证需要配合用户模型，同时还需要控制验证力度，后续构建
+	// // 邮箱验证子模块
+	// if err := l.validateEmail(req.Email); err != nil {
+	// 	return nil, err
+	// }
+
+	// 检查限流
+	if err := l.checkRateLimit(req.Email); err != nil {
+		return nil, err
+	}
+
+	// 清理未使用的验证码
+	l.cleanupRedisData(req.Email)
 
 	// 生成验证码
-	code := utils.GenerateDigitCode(6)
+	code := l.generateCode()
 
-	// 基础键前缀
-	baseKey := fmt.Sprintf("%s:%s", l.svcCtx.Config.Register.SendCodeConfig.RedisKeyPrefix, l.svcCtx.Config.Register.SendCodeConfig.ReceiveType)
+	// 保存到 Redis
+	if err := l.saveCodeToRedis(req.Email, code); err != nil {
+		// 如果保存失败，清理限流键
+		l.cleanupRateLimit(req.Email)
+		return nil, err
+	}
 
-	// redis缓存验证码数据
-	redisKey := fmt.Sprintf("%s:verify:%s", baseKey, req.Email)
+	// 发送到消息队列
+	if err := l.sendToMQ(req.Email, code); err != nil {
+		// 如果发送失败，清理 Redis 数据
+		l.cleanupRedisData(req.Email)
+		l.cleanupRateLimit(req.Email)
+		return nil, err
+	}
+
+	// 返回响应
+	return l.buildResponse(), nil
+}
+
+// 1. 请求验证模块
+func (l *SendRegisterCodeLogic) validateRequest(req *types.SendCodeReq) error {
+	if req == nil {
+		return fmt.Errorf("请求不能为空")
+	}
+	if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
+		return fmt.Errorf("无效的验证码请求类型: %s", req.Type)
+	}
+	return nil
+}
+
+// 2. 限流检查模块
+func (l *SendRegisterCodeLogic) checkRateLimit(email string) error {
+	limitKey := l.buildLimitKey(email)
+	retryAfter := l.svcCtx.Config.Register.SendCodeConfig.RetryAfter
+
+	// SET key value NX EX seconds：只有key不存在时才设置，并设置过期时间
+	// 这是一个原子操作，Redis保证不会被打断
+	ok, err := l.svcCtx.Redis.SetnxExCtx(l.ctx, limitKey, "1", retryAfter)
+	if err != nil {
+		return fmt.Errorf("限流检查失败: %w", err)
+	}
+
+	if !ok {
+		// key已存在，获取剩余时间
+		ttl, _ := l.svcCtx.Redis.Ttl(limitKey)
+		return fmt.Errorf("发送过于频繁，请%d秒后重试", ttl)
+	}
+
+	return nil // 设置成功，可以发送
+}
+
+// 3. 验证码生成模块
+func (l *SendRegisterCodeLogic) generateCode() string {
+	return utils.GenerateMixedCode(6)
+}
+
+// 4. Redis 存储模块
+func (l *SendRegisterCodeLogic) saveCodeToRedis(email, code string) error {
+	redisKey := l.buildVerifyKey(email)
 	redisValue := map[string]string{
 		"code": code,
-		"used": "0", // 0: 未使用, 1: 已被使用
+		"used": "0",
 	}
 
-	// 设置限流验证码键
-	limitKey := fmt.Sprintf("%s:limit:%s", baseKey, req.Email)
-	// 检查是否频繁发送（使用 Get 检查限制键是否存在）
-	ttl, err := l.svcCtx.Redis.Ttl(limitKey)
-	if err != nil {
-		return nil, fmt.Errorf("检查发送频率失败: %w", err)
+	if err := utils.SetHashWithExpire(
+		l.svcCtx.Redis,
+		l.ctx,
+		redisKey,
+		redisValue,
+		l.svcCtx.Config.Register.SendCodeConfig.ExpireIn,
+	); err != nil {
+		return fmt.Errorf("注册验证码缓存失败: %w", err)
 	}
-	// ttl > 0 表示 key 存在且未过期
-	if ttl > 0 {
-		return nil, fmt.Errorf("发送过于频繁，请%d秒后重试", ttl)
-	}
+	return nil
+}
 
-	// 写入注册验证码
-	if err := utils.SetHashWithExpire(l.svcCtx.Redis, l.ctx, redisKey, redisValue, l.svcCtx.Config.Register.SendCodeConfig.ExpireIn); err != nil {
-		return nil, fmt.Errorf("注册验证码缓存失败: %w", err)
-	}
-	// 写入限流验证码
-	if err := l.svcCtx.Redis.SetexCtx(l.ctx, limitKey, "1", l.svcCtx.Config.Register.SendCodeConfig.RetryAfter); err != nil {
-		return nil, fmt.Errorf("限流验证码缓存失败: %w", err)
-	}
-
-	// 定义消息
+// 5. MQ 消息发送模块
+func (l *SendRegisterCodeLogic) sendToMQ(email, code string) error {
 	msg := types.VerificationCodeMessage{
 		Code:      code,
-		Receiver:  req.Email,
+		Receiver:  email,
 		Type:      l.svcCtx.Config.Register.SendCodeConfig.ReceiveType,
 		Timestamp: time.Now().Unix(),
 	}
 
-	// 序列化消息
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return nil, fmt.Errorf("消息序列化失败: %w", err)
+		return fmt.Errorf("消息序列化失败: %w", err)
 	}
 
-	// 将验证码推送到消息队列中
 	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
-		return nil, fmt.Errorf("消息队列推送失败: %w", err)
+		return fmt.Errorf("消息队列推送失败: %w", err)
 	}
+	return nil
+}
 
+// 6. 响应构建模块
+func (l *SendRegisterCodeLogic) buildResponse() *types.SendCodeResp {
 	return &types.SendCodeResp{
 		RetryAfter: l.svcCtx.Config.Register.SendCodeConfig.RetryAfter,
-	}, nil
+	}
+}
+
+// ==================== 辅助函数 ====================
+
+func (l *SendRegisterCodeLogic) buildBaseKey() string {
+	return fmt.Sprintf("%s:%s",
+		l.svcCtx.Config.Register.SendCodeConfig.RedisKeyPrefix,
+		l.svcCtx.Config.Register.SendCodeConfig.ReceiveType)
+}
+
+func (l *SendRegisterCodeLogic) buildVerifyKey(email string) string {
+	return fmt.Sprintf("%s:verify:%s", l.buildBaseKey(), email)
+}
+
+func (l *SendRegisterCodeLogic) buildLimitKey(email string) string {
+	return fmt.Sprintf("%s:limit:%s", l.buildBaseKey(), email)
+}
+
+// 清理函数
+func (l *SendRegisterCodeLogic) cleanupRateLimit(email string) {
+	limitKey := l.buildLimitKey(email)
+	l.svcCtx.Redis.DelCtx(l.ctx, limitKey)
+}
+
+func (l *SendRegisterCodeLogic) cleanupRedisData(email string) {
+	verifyKey := l.buildVerifyKey(email)
+	l.svcCtx.Redis.DelCtx(l.ctx, verifyKey)
 }
