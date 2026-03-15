@@ -9,13 +9,11 @@ import (
 	"fmt"
 
 	"user/internal/config"
-	"user/internal/handler"
 	"user/internal/mqs"
 	"user/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/service"
-	"github.com/zeromicro/go-zero/rest"
 )
 
 var configFile = flag.String("f", "etc/user-api.yaml", "the config file")
@@ -26,14 +24,9 @@ func main() {
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
 
-	// 主服务
-	server := rest.MustNewServer(c.RestConf)
-	defer server.Stop()
-
 	svcCtx := svc.NewServiceContext(c)
-	handler.RegisterHandlers(server, svcCtx)
-
 	ctx := context.Background()
+
 	serviceGroup := service.NewServiceGroup()
 	defer serviceGroup.Stop()
 
@@ -42,8 +35,5 @@ func main() {
 		serviceGroup.Add(mq)
 	}
 	fmt.Printf("Starting MQ consumer...\n")
-	go serviceGroup.Start()
-
-	fmt.Printf("Starting server at %s:%d...\n", c.Host, c.Port)
-	server.Start()
+	serviceGroup.Start()
 }
