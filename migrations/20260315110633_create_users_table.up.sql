@@ -5,24 +5,33 @@ BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ language plpgsql;
 
 -- 创建用户表
 CREATE TABLE IF NOT EXISTS users (
+    -- 内部自增主键（永远不变）
     id BIGSERIAL PRIMARY KEY,
-    uuid UUID DEFAULT gen_random_uuid() NOT NULL,
+    
+    -- 业务雪花ID（对外暴露）
+    snowflake_id BIGINT NOT NULL,
+    
+    -- 用户信息
     nickname VARCHAR(50) NOT NULL,
     email VARCHAR(100) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    
+    -- 时间戳
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
     
-    CONSTRAINT users_uuid_unique UNIQUE (uuid),
+    -- 唯一约束
+    CONSTRAINT users_snowflake_id_unique UNIQUE (snowflake_id),
     CONSTRAINT users_email_unique UNIQUE (email)
 );
 
 -- 创建索引
+CREATE INDEX IF NOT EXISTS idx_users_snowflake_id ON users(snowflake_id);
 CREATE INDEX IF NOT EXISTS idx_users_nickname ON users(nickname);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at) WHERE deleted_at IS NULL;
@@ -36,8 +45,8 @@ CREATE TRIGGER update_users_updated_at
 
 -- 注释
 COMMENT ON TABLE users IS '用户表';
-COMMENT ON COLUMN users.id IS '自增主键（内部用）';
-COMMENT ON COLUMN users.uuid IS '业务ID（对外暴露）';
+COMMENT ON COLUMN users.id IS '自增主键（内部关联用，永不暴露）';
+COMMENT ON COLUMN users.snowflake_id IS '雪花ID（对外暴露的业务ID）';
 COMMENT ON COLUMN users.nickname IS '用户昵称';
 COMMENT ON COLUMN users.email IS '邮箱（登录账号）';
 COMMENT ON COLUMN users.password_hash IS '密码哈希值';
