@@ -65,3 +65,6 @@ __debug_bin
 
 # OS generated files
 Thumbs.db
+
+coverage
+*.out
