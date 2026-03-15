@@ -3,6 +3,16 @@
 
 package types
 
+type RegisterReq struct {
+	Email    string `json:"email"`    // 邮箱
+	Password string `json:"password"` // 密码
+	Code     string `json:"code"`     // 验证码
+	Nickname string `json:"nickname"` // 昵称
+}
+
+type RegisterResp struct {
+}
+
 type SendCodeReq struct {
 	Email string `json:"email"` // 邮箱地址
 	Type  string `json:"type"`  // 验证码类型: register/reset_password/bind_email
