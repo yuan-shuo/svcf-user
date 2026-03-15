@@ -18,7 +18,14 @@ type Config struct {
 
 	RedisConfig redis.RedisConf // redis配置
 
+	PostgreSQL PostgreSQL // pg数据库配置
+
 	rest.RestConf
+}
+
+// pg数据库配置
+type PostgreSQL struct {
+	Datasource string
 }
 
 // 消息队列生产者配置
