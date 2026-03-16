@@ -42,27 +42,20 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
-      kafka:
-        image: bitnami/kafka:3.6.1
+          
+      # Redpanda 服务 - 用 options 传递所有启动参数
+      redpanda:
+        image: docker.io/redpandadata/redpanda:v25.3.6
         ports:
           - 9092:9092
-        env:
-          KAFKA_CFG_NODE_ID: 0
-          KAFKA_CFG_PROCESS_ROLES: controller,broker
-          KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
-          KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-          KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-          KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-          KAFKA_KRAFT_CLUSTER_ID: abcdefghijklmnopqrstuv
-          ALLOW_PLAINTEXT_LISTENER: yes
-          KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
+          - 9644:9644
+        # 把所有命令参数塞进 --entrypoint 后面的字符串
         options: >-
-          --health-cmd "kafka-broker-api-versions.sh --bootstrap-server localhost:9092"
+          --entrypoint "redpanda start --smp 1 --memory 1G --reserve-memory 0M --overprovisioned --node-id 0 --check=false --kafka-addr PLAINTEXT://0.0.0.0:9092 --advertise-kafka-addr PLAINTEXT://localhost:9092"
+          --health-cmd "rpk cluster health --brokers localhost:9092"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 15
 
     steps:
     - uses: actions/checkout@v4
