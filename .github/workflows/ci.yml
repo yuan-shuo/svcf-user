@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: ["*"]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -18,6 +18,31 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: username
+          POSTGRES_PASSWORD: 123456
+          POSTGRES_DB: user_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
@@ -37,11 +62,32 @@ jobs:
     - name: Download dependencies
       run: go mod download
 
-    - name: Run tests
+    - name: Create config file from template
       run: |
-        go test ./internal/utils/... \
-                ./internal/logic/... \
-                ./internal/mqs/... \
-                -race \
-                -cover \
-                -tags=unit
+        cp ./etc/user-api.template.yaml ./etc/user-api.yaml
+        echo "Config file created: ./etc/user-api.yaml"
+
+    - name: Install PostgreSQL client (for verification)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+
+    - name: Run database migrations
+      run: |
+        echo "Running migrations..."
+        go run ./cmd/migrate/main.go
+        echo "Migrations completed"
+
+    - name: Verify database tables
+      run: |
+        echo "Verifying tables..."
+        PGPASSWORD=123456 psql -h localhost -U username -d user_db -c "\dt"
+        PGPASSWORD=123456 psql -h localhost -U username -d user_db -c "SELECT COUNT(*) FROM users;" || echo "ℹ️ Users table not ready yet"
+
+    - name: Run all tests
+      env:
+        GO_ENV: test
+      run: |
+        echo "Running tests..."
+        go test ./... -race -cover -tags=unit -v
+        echo "Tests completed"
