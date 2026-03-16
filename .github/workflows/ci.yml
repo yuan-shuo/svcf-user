@@ -42,23 +42,38 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          
-      # Redpanda 服务 - 用 options 传递所有启动参数
-      redpanda:
-        image: docker.io/redpandadata/redpanda:v25.3.6
-        ports:
-          - 9092:9092
-          - 9644:9644
-        # 把所有命令参数塞进 --entrypoint 后面的字符串
-        options: >-
-          --entrypoint "redpanda start --smp 1 --memory 1G --reserve-memory 0M --overprovisioned --node-id 0 --check=false --kafka-addr PLAINTEXT://0.0.0.0:9092 --advertise-kafka-addr PLAINTEXT://localhost:9092"
-          --health-cmd "rpk cluster health --brokers localhost:9092"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 15
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Start Redpanda
+      run: |
+        docker run -d --name redpanda \
+          --network host \
+          docker.io/redpandadata/redpanda:v25.3.6 \
+          redpanda start \
+          --smp 1 \
+          --memory 1G \
+          --reserve-memory 0M \
+          --overprovisioned \
+          --node-id 0 \
+          --check=false \
+          --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+          --advertise-kafka-addr PLAINTEXT://localhost:9092
+        
+        echo "Waiting for Redpanda to be ready..."
+        for i in {1..30}; do
+          if docker exec redpanda rpk cluster health --brokers localhost:9092 2>/dev/null | grep -q "Healthy"; then
+            echo "Redpanda is healthy!"
+            exit 0
+          fi
+          echo "Attempt $i/30: not ready yet..."
+          sleep 2
+        done
+        
+        echo "Redpanda failed to start, logs:"
+        docker logs redpanda
+        exit 1
 
     - name: Set up Go
       uses: actions/setup-go@v5
