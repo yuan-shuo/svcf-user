@@ -61,6 +61,11 @@ jobs:
 
     - name: Download dependencies
       run: go mod download
+    
+    - name: Start Redpanda
+      uses: redpanda-data/github-action@v0.1.4
+      with:
+        version: "latest"      
 
     - name: Create config file from template
       run: |
