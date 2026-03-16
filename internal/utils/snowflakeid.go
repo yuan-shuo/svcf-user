@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"time"
 
 	"github.com/sony/sonyflake"
@@ -24,13 +25,16 @@ func InitSonyflake(machineID uint16, startTime string) error {
 
 	flake = sonyflake.NewSonyflake(settings)
 	if flake == nil {
-		return err
+		return errors.New("failed to create sonyflake instance")
 	}
 	return nil
 }
 
 // GenerateID 生成雪花ID
 func GenerateID() (int64, error) {
+	if flake == nil {
+		return 0, errors.New("sonyflake not initialized")
+	}
 	id, err := flake.NextID()
-	return int64(id), err // 在这里转换
+	return int64(id), err // 最终将id转换为int64
 }
