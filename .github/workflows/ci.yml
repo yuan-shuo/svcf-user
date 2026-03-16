@@ -116,13 +116,25 @@ jobs:
       env:
         GO_ENV: test
       run: |
-        echo "Running tests..."
-        go test ./internal/... -race -cover -tags=unit
-        echo "Tests completed"
+        go test \
+        -race \
+        -cover \
+        -covermode=atomic \
+        -coverprofile=coverage.out \
+        -tags=unit \
+        ./internal/utils/... \
+        ./internal/logic/... \
+        ./internal/mqs/...
 
     - name: Run all build
       run: |
-        echo "Running build tests"
+        go build user
         go build ./cmd/mqs
         go build ./cmd/migrate
-        echo "Build tests completed"
+
+    - name: Upload to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage.out
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}        
