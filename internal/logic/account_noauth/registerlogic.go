@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"user/internal/errs"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -37,24 +38,27 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 
 	// 检查邮箱及验证码是否正确
 	if err := l.verfiyEmailAndCodeInRedis(req.Email, req.Code); err != nil {
-		return nil, fmt.Errorf("邮箱验证码验证失败: %w", err)
+		return nil, err
 	}
 
 	// 检查邮箱是否被注册过
 	if err := l.checkIfEmailHasBeenRegistered(req.Email); err != nil {
-		return nil, fmt.Errorf("邮箱注册信息验证失败: %w", err)
+		return nil, err
 	}
 
 	// 密码加密
 	hashedPassword, err := l.hashPassword(req.Password)
 	if err != nil {
-		logx.Errorf("密码加密失败, email=%s, err=%v", req.Email, err)
-		return nil, fmt.Errorf("注册失败，请稍后重试")
+		// 记录详细错误日志
+		logx.Errorf("密码加密失败, email=%s, err=%w", req.Email, err)
+		// 返回通用错误给客户端
+		return nil, errs.New(errs.CodeInternalError)
 	}
 
 	// 数据库创建用户
 	if err := l.createUser(req.Nickname, req.Email, hashedPassword); err != nil {
-		return nil, fmt.Errorf("用户创建失败: %w", err)
+		// createUser 内部已记录详细日志，直接返回错误码
+		return nil, err
 	}
 
 	// 标记验证码已被使用
@@ -67,7 +71,8 @@ func (l *RegisterLogic) createUser(nickname, email, passwd string) error {
 	// 创建用户（写入数据库）
 	snowflakeId, err := utils.GenerateID()
 	if err != nil {
-		return fmt.Errorf("雪花id生成失败: %w", err)
+		logx.Errorf("雪花id生成失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 	_, err = l.svcCtx.UsersModel.Insert(l.ctx, &model.Users{
 		SnowflakeId:  snowflakeId,
@@ -77,7 +82,8 @@ func (l *RegisterLogic) createUser(nickname, email, passwd string) error {
 		DeletedAt:    sql.NullTime{Valid: false},
 	})
 	if err != nil {
-		return fmt.Errorf("数据库创建用户失败: %w", err)
+		logx.Errorf("数据库创建用户失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 
 	return nil
@@ -87,46 +93,41 @@ func (l *RegisterLogic) createUser(nickname, email, passwd string) error {
 func (l *RegisterLogic) checkIfEmailHasBeenRegistered(email string) error {
 	_, err := l.svcCtx.UsersModel.FindOneByEmail(l.ctx, email)
 	if err == nil {
-		return fmt.Errorf("该邮箱已注册")
+		// 邮箱已存在
+		return errs.New(errs.CodeEmailRegistered)
 	}
 	if err != sqlx.ErrNotFound {
-		return fmt.Errorf("邮箱是否注册验证失败: %w", err)
+		// 数据库查询出错
+		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
+	// 未找到，说明邮箱未注册
 	return nil
 }
 
 func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) error {
-
-	// 构建检查键
 	key := l.buildVerifyKey(email)
 
-	// 检查邮箱键是否存在
-	exists, err := l.svcCtx.Redis.ExistsCtx(l.ctx, key)
+	// 一次获取所有字段（Hgetall）
+	fields, err := l.svcCtx.Redis.HgetallCtx(l.ctx, key)
 	if err != nil {
-		return fmt.Errorf("验证码验证键失败: %w", err)
-	}
-	if !exists {
-		return fmt.Errorf("验证码不存在或已过期")
+		logx.Errorf("获取验证码信息失败, email=%s, key=%s, err=%w", email, key, err)
+		return errs.New(errs.CodeInternalError)
 	}
 
-	// 检查是否已被使用
-	used, err := l.svcCtx.Redis.HgetCtx(l.ctx, key, redisValueUsedFieldName)
-	if err != nil {
-		return fmt.Errorf("redis获取%s字段失败: %w", redisValueUsedFieldName, err)
-	}
-	if used != "0" {
-		return fmt.Errorf("验证码已被使用")
+	// 键不存在或没有 code 字段
+	if len(fields) == 0 || fields[redisValueCodeFieldName] == "" {
+		return errs.New(errs.CodeInvalidCode)
 	}
 
-	// 获取存储的验证码
-	storedCode, err := l.svcCtx.Redis.HgetCtx(l.ctx, key, redisValueCodeFieldName)
-	if err != nil {
-		return fmt.Errorf("redis获取%s字段失败: %w", redisValueCodeFieldName, err)
+	// 检查是否已使用
+	if fields[redisValueUsedFieldName] != "0" {
+		return errs.New(errs.CodeCodeAlreadyUsed)
 	}
 
-	// 比对验证码（忽略大小写）
-	if !strings.EqualFold(storedCode, code) {
-		return fmt.Errorf("验证码错误")
+	// 比对验证码
+	if !strings.EqualFold(fields[redisValueCodeFieldName], code) {
+		return errs.New(errs.CodeInvalidCode)
 	}
 
 	return nil
@@ -145,7 +146,7 @@ func (l *RegisterLogic) hashPassword(password string) (string, error) {
 func (l *RegisterLogic) markCodeAsUsed(email string) {
 	key := l.buildVerifyKey(email)
 	if err := l.svcCtx.Redis.HsetCtx(l.ctx, key, redisValueUsedFieldName, "1"); err != nil {
-		logx.Errorf("标记验证码已使用失败, email=%s, err=%v", email, err)
+		logx.Errorf("标记验证码已使用失败, email=%s, key=%s, err=%w", email, key, err)
 	}
 }
 
