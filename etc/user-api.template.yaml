@@ -37,3 +37,10 @@ RedisConfig:
   Tls: false
   NonBlock: true
   PingTimeout: 1s
+
+PostgreSQL:
+  datasource: "postgres://username:123456@127.0.0.1:5432/user_db?sslmode=disable"
+CacheRedis:
+  - Host: 127.0.0.1:6379
+    Type: node
+    Pass: ""

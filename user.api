@@ -10,20 +10,24 @@ service user-api {
 	// 发送注册验证码
 	@handler sendRegisterCode
 	post /register/code (SendCodeReq) returns (SendCodeResp)
-// // 邮箱注册
-// @handler register
-// post /register (RegisterReq) returns (RegisterResp)
+
+	// 邮箱注册
+	@handler register
+	post /register (RegisterReq) returns (RegisterResp)
 }
 
+// 发送注册验证码请求
 type SendCodeReq {
 	Email string `json:"email"` // 邮箱地址
 	Type  string `json:"type"` // 验证码类型: register/reset_password/bind_email
 }
 
+// 发送注册验证码响应
 type SendCodeResp {
 	RetryAfter int `json:"retryAfter"` // 多少秒后可重发
 }
 
+// 验证码内部使用类型
 type VerificationCodeMessage {
 	Code      string `json:"code"` // 验证码
 	Receiver  string `json:"receiver"` // 接收方邮箱
@@ -31,19 +35,14 @@ type VerificationCodeMessage {
 	Timestamp int64  `json:"timestamp"` // 时间戳，用于过期判断
 }
 
-// // ========== 注册相关类型 ==========
-// // 注册请求
-// type RegisterReq {
-//     Email     string `json:"email"`     // 邮箱
-//     Password  string `json:"password"`  // 密码
-//     Code      string `json:"code"`      // 验证码
-//     Nickname  string `json:"nickname"`  // 昵称
-// }
-// // 注册响应
-// type RegisterResp {
-//     UserId    int64  `json:"userId"`
-//     Email     string `json:"email"`
-//     Nickname  string `json:"nickname"`
-//     Token     string `json:"token"`
-//     ExpireAt  int64  `json:"expireAt"`
-// }
+// 注册请求
+type RegisterReq {
+	Email    string `json:"email"` // 邮箱
+	Password string `json:"password"` // 密码
+	Code     string `json:"code"` // 验证码
+	Nickname string `json:"nickname"` // 昵称
+}
+
+// 注册响应
+type RegisterResp {}
+

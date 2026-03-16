@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: ["*"]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -18,6 +18,31 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: username
+          POSTGRES_PASSWORD: 123456
+          POSTGRES_DB: user_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
@@ -35,13 +60,69 @@ jobs:
           ${{ runner.os }}-go-
 
     - name: Download dependencies
-      run: go mod download
+      run: go mod download   
 
-    - name: Run tests
+    - name: Create config file from template
       run: |
-        go test ./internal/utils/... \
-                ./internal/logic/... \
-                ./internal/mqs/... \
-                -race \
-                -cover \
-                -tags=unit
+        cp ./etc/user-api.template.yaml ./etc/user-api.yaml
+        echo "Config file created: ./etc/user-api.yaml"
+
+    - name: Install PostgreSQL client (for verification)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+
+    - name: Install golang-migrate
+      run: |
+        curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz | tar xvz
+        sudo mv migrate /usr/local/bin/
+        migrate -version
+        echo "golang-migrate installed"
+
+    - name: Run database migrations
+      run: |
+        echo "Running migrations..."
+        go run ./cmd/migrate/main.go
+        echo "Migrations completed"
+
+    - name: Verify database tables
+      run: |
+        echo "Verifying tables..."
+        PGPASSWORD=123456 psql -h localhost -U username -d user_db -c "\dt"
+        PGPASSWORD=123456 psql -h localhost -U username -d user_db -c "SELECT COUNT(*) FROM users;" || echo "Users table not ready yet"
+
+    - name: Install goctl
+      run: |
+        go install github.com/zeromicro/go-zero/tools/goctl@latest
+        echo "goctl installed"
+
+    - name: Generate model code with goctl
+      run: |
+        echo "Generating model code..."
+        goctl model pg datasource \
+          --url="postgres://username:123456@localhost:5432/user_db?sslmode=disable" \
+          --table="users" \
+          --dir="./internal/model" \
+          --cache
+        echo "Model code generated"
+
+    - name: Verify generated code
+      run: |
+        ls -la ./internal/model/
+        echo "usersmodel_gen.go exists:"
+        ls -la ./internal/model/usersmodel_gen.go || echo "usersmodel_gen.go not found"
+
+    - name: Run all tests
+      env:
+        GO_ENV: test
+      run: |
+        echo "Running tests..."
+        go test ./internal/... -race -cover -tags=unit
+        echo "Tests completed"
+
+    - name: Run all build
+      run: |
+        echo "Running build tests"
+        go build ./cmd/mqs
+        go build ./cmd/migrate
+        echo "Build tests completed"

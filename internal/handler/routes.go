@@ -17,6 +17,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		[]rest.Route{
 			{
 				Method:  http.MethodPost,
+				Path:    "/register",
+				Handler: account_noauth.RegisterHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
 				Path:    "/register/code",
 				Handler: account_noauth.SendRegisterCodeHandler(serverCtx),
 			},

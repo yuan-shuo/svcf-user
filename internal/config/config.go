@@ -5,6 +5,7 @@ package config
 
 import (
 	"github.com/zeromicro/go-queue/kq"
+	"github.com/zeromicro/go-zero/core/stores/cache"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/rest"
 )
@@ -18,7 +19,15 @@ type Config struct {
 
 	RedisConfig redis.RedisConf // redis配置
 
+	PostgreSQL PostgreSQL      // pg数据库配置
+	CacheRedis cache.CacheConf // 缓存数据库配置
+
 	rest.RestConf
+}
+
+// pg数据库配置
+type PostgreSQL struct {
+	Datasource string
 }
 
 // 消息队列生产者配置
