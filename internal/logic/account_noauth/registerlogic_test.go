@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"user/internal/config"
+	"user/internal/errs"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -111,6 +112,17 @@ func setupTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUsersMode
 	return s, rds, mockUsersModel, svcCtx
 }
 
+// isCodeError 检查错误是否为指定的错误码
+func isCodeError(err error, code int) bool {
+	if err == nil {
+		return false
+	}
+	if e, ok := errs.IsCodeError(err); ok {
+		return e.Code == code
+	}
+	return false
+}
+
 func TestRegisterLogic_Register_Success(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupTest(t)
 	defer s.Close()
@@ -185,7 +197,7 @@ func TestRegisterLogic_Register_InvalidCode(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "验证码错误")
+	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
 }
 
 func TestRegisterLogic_Register_CodeExpired(t *testing.T) {
@@ -211,7 +223,7 @@ func TestRegisterLogic_Register_CodeExpired(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "验证码不存在或已过期")
+	assert.True(t, isCodeError(err, errs.CodeCodeExpired), "应该是验证码过期错误")
 }
 
 func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
@@ -244,7 +256,7 @@ func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "验证码已被使用")
+	assert.True(t, isCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
 }
 
 func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
@@ -287,7 +299,7 @@ func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "该邮箱已注册")
+	assert.True(t, isCodeError(err, errs.CodeEmailRegistered), "应该是邮箱已注册错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -324,7 +336,7 @@ func TestRegisterLogic_Register_DatabaseError(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "邮箱注册信息验证失败")
+	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -362,7 +374,7 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "用户创建失败")
+	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -488,7 +500,7 @@ func TestRegisterLogic_checkIfEmailHasBeenRegistered_Found(t *testing.T) {
 	err := logic.checkIfEmailHasBeenRegistered(email)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "该邮箱已注册")
+	assert.True(t, isCodeError(err, errs.CodeEmailRegistered), "应该是邮箱已注册错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -526,7 +538,7 @@ func TestRegisterLogic_verfiyEmailAndCodeInRedis_CodeNotExist(t *testing.T) {
 	err := logic.verfiyEmailAndCodeInRedis(email, code)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "验证码不存在或已过期")
+	assert.True(t, isCodeError(err, errs.CodeCodeExpired), "应该是验证码过期错误")
 }
 
 func TestRegisterLogic_verfiyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
@@ -548,7 +560,7 @@ func TestRegisterLogic_verfiyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
 	err := logic.verfiyEmailAndCodeInRedis(email, code)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "验证码已被使用")
+	assert.True(t, isCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
 }
 
 func TestRegisterLogic_verfiyEmailAndCodeInRedis_WrongCode(t *testing.T) {
@@ -570,7 +582,7 @@ func TestRegisterLogic_verfiyEmailAndCodeInRedis_WrongCode(t *testing.T) {
 	err := logic.verfiyEmailAndCodeInRedis(email, "wrongcode")
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "验证码错误")
+	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
 }
 
 func TestRegisterLogic_markCodeAsUsed(t *testing.T) {

@@ -124,6 +124,7 @@ jobs:
         -tags=unit \
         ./internal/utils/... \
         ./internal/logic/... \
+        ./internal/errs/... \
         ./internal/mqs/...
 
     - name: Run all build
