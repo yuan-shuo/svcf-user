@@ -12,7 +12,7 @@ var codeMsg = map[int]string{
 	CodeUserAlreadyExists: "用户已存在",
 	CodeInvalidPassword:   "密码错误",
 	CodeInvalidCode:       "验证码错误",
-	CodeCodeExpired:       "验证码已过期，请重新获取",
+	CodeCodeNotFound:      "验证码不存在或已过期，请重新获取",
 	CodeCodeAlreadyUsed:   "验证码已使用，请重新获取",
 	CodeEmailRegistered:   "该邮箱已注册",
 	CodeEmailNotVerified:  "邮箱未验证",

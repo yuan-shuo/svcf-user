@@ -106,39 +106,27 @@ func (l *RegisterLogic) checkIfEmailHasBeenRegistered(email string) error {
 }
 
 func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) error {
-
-	// 构建检查键
 	key := l.buildVerifyKey(email)
 
-	// 检查邮箱键是否存在
-	exists, err := l.svcCtx.Redis.ExistsCtx(l.ctx, key)
+	// 一次获取所有字段（Hgetall）
+	fields, err := l.svcCtx.Redis.HgetallCtx(l.ctx, key)
 	if err != nil {
-		logx.Errorf("检查验证码键是否存在失败, email=%s, key=%s, err=%w", email, key, err)
+		logx.Errorf("获取验证码信息失败, email=%s, key=%s, err=%w", email, key, err)
 		return errs.New(errs.CodeInternalError)
-	}
-	if !exists {
-		return errs.New(errs.CodeCodeExpired)
 	}
 
-	// 检查是否已被使用
-	used, err := l.svcCtx.Redis.HgetCtx(l.ctx, key, redisValueUsedFieldName)
-	if err != nil {
-		logx.Errorf("获取验证码使用状态失败, email=%s, key=%s, err=%w", email, key, err)
-		return errs.New(errs.CodeInternalError)
+	// 键不存在或没有 code 字段
+	if len(fields) == 0 || fields[redisValueCodeFieldName] == "" {
+		return errs.New(errs.CodeInvalidCode)
 	}
-	if used != "0" {
+
+	// 检查是否已使用
+	if fields[redisValueUsedFieldName] != "0" {
 		return errs.New(errs.CodeCodeAlreadyUsed)
 	}
 
-	// 获取存储的验证码
-	storedCode, err := l.svcCtx.Redis.HgetCtx(l.ctx, key, redisValueCodeFieldName)
-	if err != nil {
-		logx.Errorf("获取存储的验证码失败, email=%s, key=%s, err=%w", email, key, err)
-		return errs.New(errs.CodeInternalError)
-	}
-
-	// 比对验证码（忽略大小写）
-	if !strings.EqualFold(storedCode, code) {
+	// 比对验证码
+	if !strings.EqualFold(fields[redisValueCodeFieldName], code) {
 		return errs.New(errs.CodeInvalidCode)
 	}
 

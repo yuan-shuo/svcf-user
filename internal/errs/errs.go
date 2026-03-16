@@ -1,15 +1,18 @@
 package errs
 
-import "fmt"
-
 // CodeError 带错误码的错误类型
 type CodeError struct {
+	Code int
+	Msg  string
+}
+
+type CodeErrorResponse struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 }
 
 func (e *CodeError) Error() string {
-	return fmt.Sprintf("code: %d, msg: %s", e.Code, e.Msg)
+	return e.Msg
 }
 
 // GetMsg 获取错误码对应的错误信息
@@ -18,6 +21,13 @@ func GetMsg(code int) string {
 		return msg
 	}
 	return "未知错误"
+}
+
+func (e *CodeError) Data() *CodeErrorResponse {
+	return &CodeErrorResponse{
+		Code: e.Code,
+		Msg:  e.Msg,
+	}
 }
 
 // New 创建一个新的 CodeError

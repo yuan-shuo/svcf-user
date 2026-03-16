@@ -223,7 +223,7 @@ func TestRegisterLogic_Register_CodeExpired(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeCodeExpired), "应该是验证码过期错误")
+	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
 }
 
 func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
@@ -538,7 +538,7 @@ func TestRegisterLogic_verfiyEmailAndCodeInRedis_CodeNotExist(t *testing.T) {
 	err := logic.verfiyEmailAndCodeInRedis(email, code)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeCodeExpired), "应该是验证码过期错误")
+	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
 }
 
 func TestRegisterLogic_verfiyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {

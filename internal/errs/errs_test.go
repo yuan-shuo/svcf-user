@@ -14,17 +14,17 @@ func TestCodeError_Error(t *testing.T) {
 		{
 			name:     "普通错误",
 			codeErr:  &CodeError{Code: CodeInvalidParam, Msg: "参数错误"},
-			expected: "code: 1001, msg: 参数错误",
+			expected: "参数错误",
 		},
 		{
 			name:     "成功状态",
 			codeErr:  &CodeError{Code: CodeSuccess, Msg: "success"},
-			expected: "code: 0, msg: success",
+			expected: "success",
 		},
 		{
 			name:     "空消息",
 			codeErr:  &CodeError{Code: CodeInternalError, Msg: ""},
-			expected: "code: 1000, msg: ",
+			expected: "",
 		},
 	}
 
@@ -33,6 +33,58 @@ func TestCodeError_Error(t *testing.T) {
 			got := tt.codeErr.Error()
 			if got != tt.expected {
 				t.Errorf("Error() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCodeError_Data(t *testing.T) {
+	tests := []struct {
+		name         string
+		codeErr      *CodeError
+		wantCode     int
+		wantMsg      string
+		wantJSONCode int
+		wantJSONMsg  string
+	}{
+		{
+			name:         "普通错误",
+			codeErr:      &CodeError{Code: CodeInvalidParam, Msg: "参数错误"},
+			wantCode:     CodeInvalidParam,
+			wantMsg:      "参数错误",
+			wantJSONCode: CodeInvalidParam,
+			wantJSONMsg:  "参数错误",
+		},
+		{
+			name:         "成功状态",
+			codeErr:      &CodeError{Code: CodeSuccess, Msg: "success"},
+			wantCode:     CodeSuccess,
+			wantMsg:      "success",
+			wantJSONCode: CodeSuccess,
+			wantJSONMsg:  "success",
+		},
+		{
+			name:         "空消息",
+			codeErr:      &CodeError{Code: CodeInternalError, Msg: ""},
+			wantCode:     CodeInternalError,
+			wantMsg:      "",
+			wantJSONCode: CodeInternalError,
+			wantJSONMsg:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.codeErr.Data()
+			if got == nil {
+				t.Errorf("Data() = nil, want non-nil")
+				return
+			}
+			if got.Code != tt.wantJSONCode {
+				t.Errorf("Data().Code = %v, want %v", got.Code, tt.wantJSONCode)
+			}
+			if got.Msg != tt.wantJSONMsg {
+				t.Errorf("Data().Msg = %v, want %v", got.Msg, tt.wantJSONMsg)
 			}
 		})
 	}
@@ -131,11 +183,11 @@ func TestNew(t *testing.T) {
 
 func TestIsCodeError(t *testing.T) {
 	tests := []struct {
-		name           string
-		err            error
-		wantOk         bool
-		wantCode       int
-		wantMsg        string
+		name     string
+		err      error
+		wantOk   bool
+		wantCode int
+		wantMsg  string
 	}{
 		{
 			name:     "nil错误",
@@ -182,12 +234,12 @@ func TestIsCodeError(t *testing.T) {
 
 func TestWrap(t *testing.T) {
 	tests := []struct {
-		name         string
-		err          error
-		defaultCode  int
-		wantNil      bool
-		wantCode     int
-		wantMsg      string
+		name        string
+		err         error
+		defaultCode int
+		wantNil     bool
+		wantCode    int
+		wantMsg     string
 	}{
 		{
 			name:        "nil错误",
