@@ -89,7 +89,28 @@ jobs:
       run: |
         echo "Verifying tables..."
         PGPASSWORD=123456 psql -h localhost -U username -d user_db -c "\dt"
-        PGPASSWORD=123456 psql -h localhost -U username -d user_db -c "SELECT COUNT(*) FROM users;" || echo "ℹ️ Users table not ready yet"
+        PGPASSWORD=123456 psql -h localhost -U username -d user_db -c "SELECT COUNT(*) FROM users;" || echo "Users table not ready yet"
+
+    - name: Install goctl
+      run: |
+        go install github.com/zeromicro/go-zero/tools/goctl@latest
+        echo "goctl installed"
+
+    - name: Generate model code with goctl
+      run: |
+        echo "Generating model code..."
+        goctl model pg datasource \
+          --url="postgres://username:123456@localhost:5432/user_db?sslmode=disable" \
+          --table="users" \
+          --dir="./internal/model" \
+          --cache
+        echo "Model code generated"
+
+    - name: Verify generated code
+      run: |
+        ls -la ./internal/model/
+        echo "usersmodel_gen.go exists:"
+        ls -la ./internal/model/usersmodel_gen.go || echo "usersmodel_gen.go not found"
 
     - name: Run all tests
       env:
