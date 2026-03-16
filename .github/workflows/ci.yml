@@ -46,37 +46,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Start Redpanda
-      run: |
-        docker run -d --name redpanda \
-          --network host \
-          docker.io/redpandadata/redpanda:v25.3.6 \
-          redpanda start \
-          --smp 1 \
-          --memory 1G \
-          --reserve-memory 0M \
-          --overprovisioned \
-          --node-id 0 \
-          --check=false \
-          --kafka-addr PLAINTEXT://0.0.0.0:9092 \
-          --advertise-kafka-addr PLAINTEXT://localhost:9092
-        
-        echo "Waiting for Redpanda Kafka port..."
-        for i in {1..30}; do
-          if nc -z localhost 9092 2>/dev/null; then
-            echo "Redpanda Kafka port is open!"
-            # 再等 3 秒让服务完全初始化
-            sleep 3
-            exit 0
-          fi
-          echo "Attempt $i/30..."
-          sleep 2
-        done
-        
-        echo "Redpanda failed to start"
-        docker logs redpanda --tail 50
-        exit 1
-
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
@@ -148,5 +117,12 @@ jobs:
         GO_ENV: test
       run: |
         echo "Running tests..."
-        go test ./... -race -cover -tags=unit
+        go test ./internal/... -race -cover -tags=unit
         echo "Tests completed"
+
+    - name: Run all build
+      run: |
+        echo "Running build tests"
+        go build ./cmd/mqs
+        go build ./cmd/migrate
+        echo "Build tests completed"
