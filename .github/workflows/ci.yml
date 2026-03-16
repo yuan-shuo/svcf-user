@@ -43,6 +43,22 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redpanda:
+        image: redpandadata/redpanda:latest
+        ports:
+          - 9092:9092
+          - 9644:9644
+        options: >-
+          --entrypoint redpanda
+          --health-cmd "rpk cluster health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        env:
+          REDPANDA_SMP: "1"
+          REDPANDA_OVERPROVISIONED: "true"
+          REDPANDA_NODE_ID: "0"
+
     steps:
     - uses: actions/checkout@v4
 
@@ -60,12 +76,7 @@ jobs:
           ${{ runner.os }}-go-
 
     - name: Download dependencies
-      run: go mod download
-    
-    - name: Start Redpanda
-      uses: redpanda-data/github-action@v0.1.4
-      with:
-        version: "latest"      
+      run: go mod download   
 
     - name: Create config file from template
       run: |
