@@ -4,6 +4,12 @@
 
 service frame of user: 用户微服务框架
 
+## 数据库模型生成
+
+```bash
+goctl model pg datasource -url="postgres://username:123456@127.0.0.1:5432/user_db?sslmode=disable" -table="users" -dir="./internal/model" -cache
+```
+
 ## redis 键命名
 
 ```go

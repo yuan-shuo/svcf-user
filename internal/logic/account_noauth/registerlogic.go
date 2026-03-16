@@ -5,13 +5,17 @@ package account_noauth
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
+	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
+	"user/internal/utils"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -36,27 +40,59 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 		return nil, fmt.Errorf("邮箱验证码验证失败: %w", err)
 	}
 
-	// 检查邮箱是否被注册
-	// 还没实现，要和pg联动
+	// 检查邮箱是否被注册过
+	if err := l.checkIfEmailHasBeenRegistered(req.Email); err != nil {
+		return nil, fmt.Errorf("邮箱注册信息验证失败: %w", err)
+	}
 
-	// 密码加密(等数据库接)
-	// hashedPassword, err := l.hashPassword(req.Password)
-	// if err != nil {
-	// 	logx.Errorf("密码加密失败, email=%s, err=%v", req.Email, err)
-	// 	return nil, errors.New("注册失败，请稍后重试")
-	// }
+	// 密码加密
+	hashedPassword, err := l.hashPassword(req.Password)
+	if err != nil {
+		logx.Errorf("密码加密失败, email=%s, err=%v", req.Email, err)
+		return nil, fmt.Errorf("注册失败，请稍后重试")
+	}
 
-	// 创建用户记录（写入数据库）
-	// 还没实现，要和pg联动
-	// if err := l.createUser(req, hashedPassword); err != nil {
-	// 	logx.Errorf("创建用户失败, email=%s, err=%v", req.Email, err)
-	// 	return nil, errors.New("注册失败，请稍后重试")
-	// }
+	// 数据库创建用户
+	if err := l.createUser(req.Nickname, req.Email, hashedPassword); err != nil {
+		return nil, fmt.Errorf("用户创建失败: %w", err)
+	}
 
 	// 标记验证码已被使用
 	l.markCodeAsUsed(req.Email)
 
 	return
+}
+
+func (l *RegisterLogic) createUser(nickname, email, passwd string) error {
+	// 创建用户（写入数据库）
+	snowflakeId, err := utils.GenerateID()
+	if err != nil {
+		return fmt.Errorf("雪花id生成失败: %w", err)
+	}
+	_, err = l.svcCtx.UsersModel.Insert(l.ctx, &model.Users{
+		SnowflakeId:  snowflakeId,
+		Nickname:     nickname,
+		Email:        email,
+		PasswordHash: passwd,
+		DeletedAt:    sql.NullTime{Valid: false},
+	})
+	if err != nil {
+		return fmt.Errorf("数据库创建用户失败: %w", err)
+	}
+
+	return nil
+}
+
+// 检查邮箱是否被注册
+func (l *RegisterLogic) checkIfEmailHasBeenRegistered(email string) error {
+	_, err := l.svcCtx.UsersModel.FindOneByEmail(l.ctx, email)
+	if err == nil {
+		return fmt.Errorf("该邮箱已注册")
+	}
+	if err != sqlx.ErrNotFound {
+		return fmt.Errorf("邮箱是否注册验证失败: %w", err)
+	}
+	return nil
 }
 
 func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) error {
@@ -95,23 +131,6 @@ func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) err
 
 	return nil
 }
-
-// 创建用户
-// 还没写，等pg
-// func (l *RegisterLogic) createUser(req *types.RegisterReq, hashedPassword string) (int64, error) {
-//     user := &User{
-//         Email:     req.Email,
-//         Password:  hashedPassword,
-//         Nickname:  req.Nickname,
-//         CreatedAt: time.Now().Unix(),
-//     }
-
-//     err := l.svcCtx.DB.Create(user).Error
-//     if err != nil {
-//         return 0, err
-//     }
-//     return user.Id, nil
-// }
 
 // 密码加密
 func (l *RegisterLogic) hashPassword(password string) (string, error) {
