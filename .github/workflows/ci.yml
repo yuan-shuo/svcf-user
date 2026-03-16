@@ -135,7 +135,10 @@ jobs:
 
     - name: Upload to Codecov
       uses: codecov/codecov-action@v5
+      if: |
+        (github.event_name == 'push' && github.ref_name == 'main') ||
+        (github.event_name == 'pull_request' && github.base_ref == 'main')
       with:
         files: ./coverage.out
       env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}        
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
