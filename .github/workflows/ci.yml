@@ -61,18 +61,20 @@ jobs:
           --kafka-addr PLAINTEXT://0.0.0.0:9092 \
           --advertise-kafka-addr PLAINTEXT://localhost:9092
         
-        echo "Waiting for Redpanda to be ready..."
+        echo "Waiting for Redpanda Kafka port..."
         for i in {1..30}; do
-          if docker exec redpanda rpk cluster health --brokers localhost:9092 2>/dev/null | grep -q "Healthy"; then
-            echo "Redpanda is healthy!"
+          if nc -z localhost 9092 2>/dev/null; then
+            echo "Redpanda Kafka port is open!"
+            # 再等 3 秒让服务完全初始化
+            sleep 3
             exit 0
           fi
-          echo "Attempt $i/30: not ready yet..."
+          echo "Attempt $i/30..."
           sleep 2
         done
         
-        echo "Redpanda failed to start, logs:"
-        docker logs redpanda
+        echo "Redpanda failed to start"
+        docker logs redpanda --tail 50
         exit 1
 
     - name: Set up Go
