@@ -122,5 +122,5 @@ jobs:
         GO_ENV: test
       run: |
         echo "Running tests..."
-        go test ./... -race -cover -tags=unit -v
+        go test ./... -race -cover -tags=unit
         echo "Tests completed"
