@@ -1,8 +1,6 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
-// validateEmail 未实现
-
 package account_noauth
 
 import (
@@ -96,32 +94,18 @@ func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *
 // 1. 请求验证模块
 func (l *SendRegisterCodeLogic) validateRequest(req *types.SendCodeReq) error {
 	if req == nil {
-		return fmt.Errorf("请求不能为空")
+		return errs.New(errs.CodeInvalidParam)
 	}
 	// 检查验证码类型是否正确
 	if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
-		return fmt.Errorf("无效的验证码请求类型: %s", req.Type)
+		logx.Errorf("无效的验证码请求类型, type=%s, expected=%s", req.Type, l.svcCtx.Config.Register.SendCodeConfig.ReceiveType)
+		return errs.New(errs.CodeInvalidParam)
 	}
 	// 验证邮箱格式
 	if _, err := mail.ParseAddress(req.Email); err != nil {
-		return fmt.Errorf("邮箱格式不正确: %w", err)
+		logx.Errorf("邮箱格式不正确, email=%s, err=%w", req.Email, err)
+		return errs.New(errs.CodeInvalidParam)
 	}
-	return nil
-}
-
-// 检查邮箱是否被注册
-func (l *SendRegisterCodeLogic) checkIfEmailHasBeenRegistered(email string) error {
-	_, err := l.svcCtx.UsersModel.FindOneByEmail(l.ctx, email)
-	if err == nil {
-		// 邮箱已存在
-		return errs.New(errs.CodeEmailRegistered)
-	}
-	if err != sqlx.ErrNotFound {
-		// 数据库查询出错
-		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%w", email, err)
-		return errs.New(errs.CodeInternalError)
-	}
-	// 未找到，说明邮箱未注册
 	return nil
 }
 
@@ -134,13 +118,15 @@ func (l *SendRegisterCodeLogic) checkRateLimit(email string) error {
 	// 这是一个原子操作，Redis保证不会被打断
 	ok, err := l.svcCtx.Redis.SetnxExCtx(l.ctx, limitKey, "1", retryAfter)
 	if err != nil {
-		return fmt.Errorf("限流检查失败: %w", err)
+		logx.Errorf("限流检查失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 
 	if !ok {
 		// key已存在，获取剩余时间
 		ttl, _ := l.svcCtx.Redis.Ttl(limitKey)
-		return fmt.Errorf("发送过于频繁，请%d秒后重试", ttl)
+		logx.Errorf("发送过于频繁, email=%s, ttl=%d", email, ttl)
+		return errs.New(errs.CodeInvalidParam, fmt.Sprintf("发送过于频繁，请%d秒后重试", ttl))
 	}
 
 	return nil // 设置成功，可以发送
@@ -166,7 +152,8 @@ func (l *SendRegisterCodeLogic) saveCodeToRedis(email, code string) error {
 		redisValue,
 		l.svcCtx.Config.Register.SendCodeConfig.ExpireIn,
 	); err != nil {
-		return fmt.Errorf("注册验证码缓存失败: %w", err)
+		logx.Errorf("注册验证码缓存失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 	return nil
 }
@@ -182,11 +169,13 @@ func (l *SendRegisterCodeLogic) sendToMQ(email, code string) error {
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("消息序列化失败: %w", err)
+		logx.Errorf("消息序列化失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 
 	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
-		return fmt.Errorf("消息队列推送失败: %w", err)
+		logx.Errorf("消息队列推送失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 	return nil
 }
@@ -201,11 +190,13 @@ func (l *SendRegisterCodeLogic) sendReminderEmailRegisteredToMQ(email string) er
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("消息序列化失败: %w", err)
+		logx.Errorf("消息序列化失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 
 	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
-		return fmt.Errorf("消息队列推送失败: %w", err)
+		logx.Errorf("消息队列推送失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 	return nil
 }
