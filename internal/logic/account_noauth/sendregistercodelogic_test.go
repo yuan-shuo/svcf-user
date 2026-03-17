@@ -2,6 +2,7 @@ package account_noauth
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -9,10 +10,14 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
 
 	"user/internal/config"
+	"user/internal/errs"
+	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
 )
@@ -322,7 +327,7 @@ func TestSendRegisterCodeLogic_sendToMQ(t *testing.T) {
 		assert.Greater(t, msg.Timestamp, int64(0))
 	})
 
-	t.Run("MQ推送失败返回错误", func(t *testing.T) {
+	t.Run("MQ推送失败返回内部错误", func(t *testing.T) {
 		mockClient := &mockKqPusherClient{
 			pushFunc: func(ctx context.Context, v string) error {
 				return errors.New("mq connection failed")
@@ -336,7 +341,7 @@ func TestSendRegisterCodeLogic_sendToMQ(t *testing.T) {
 
 		err := logic.sendToMQ(email, code)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "消息队列推送失败")
+		assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	})
 
 	t.Run("验证消息格式正确", func(t *testing.T) {
@@ -580,7 +585,7 @@ func TestSendRegisterCodeLogic_checkRateLimit(t *testing.T) {
 		assert.True(t, ttl <= 60*time.Second, "过期时间应该不超过配置的60秒")
 	})
 
-	t.Run("短时间内重复检查返回错误", func(t *testing.T) {
+	t.Run("短时间内重复检查返回参数错误", func(t *testing.T) {
 		logic, s := newTestSendRegisterCodeLogic(t, nil)
 		defer s.Close()
 
@@ -593,7 +598,7 @@ func TestSendRegisterCodeLogic_checkRateLimit(t *testing.T) {
 		// 短时间内再次检查应该失败
 		err = logic.checkRateLimit(email)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "发送过于频繁")
+		assert.True(t, isCodeError(err, errs.CodeInvalidParam), "应该是参数错误（发送过于频繁）")
 	})
 
 	t.Run("错误信息包含剩余时间", func(t *testing.T) {
@@ -612,7 +617,8 @@ func TestSendRegisterCodeLogic_checkRateLimit(t *testing.T) {
 		// 再次检查应该失败，并包含剩余时间
 		err = logic.checkRateLimit(email)
 		require.Error(t, err)
-		// 剩余时间应该在50秒左右（60-10=50）
+		// 检查是参数错误且包含剩余时间信息
+		assert.True(t, isCodeError(err, errs.CodeInvalidParam), "应该是参数错误")
 		assert.Contains(t, err.Error(), "50")
 	})
 
@@ -652,13 +658,13 @@ func TestSendRegisterCodeLogic_checkRateLimit(t *testing.T) {
 }
 
 func TestSendRegisterCodeLogic_validateRequest(t *testing.T) {
-	t.Run("请求为nil返回错误", func(t *testing.T) {
+	t.Run("请求为nil返回参数错误", func(t *testing.T) {
 		logic, s := newTestSendRegisterCodeLogic(t, nil)
 		defer s.Close()
 
 		err := logic.validateRequest(nil)
 		require.Error(t, err)
-		assert.Equal(t, "请求不能为空", err.Error())
+		assert.True(t, isCodeError(err, errs.CodeInvalidParam), "应该是参数错误")
 	})
 
 	t.Run("有效的请求通过验证", func(t *testing.T) {
@@ -674,7 +680,7 @@ func TestSendRegisterCodeLogic_validateRequest(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("请求类型不匹配返回错误", func(t *testing.T) {
+	t.Run("请求类型不匹配返回参数错误", func(t *testing.T) {
 		logic, s := newTestSendRegisterCodeLogic(t, nil)
 		defer s.Close()
 
@@ -685,11 +691,10 @@ func TestSendRegisterCodeLogic_validateRequest(t *testing.T) {
 
 		err := logic.validateRequest(req)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "无效的验证码请求类型")
-		assert.Contains(t, err.Error(), "sms")
+		assert.True(t, isCodeError(err, errs.CodeInvalidParam), "应该是参数错误")
 	})
 
-	t.Run("空的请求类型返回错误", func(t *testing.T) {
+	t.Run("空的请求类型返回参数错误", func(t *testing.T) {
 		logic, s := newTestSendRegisterCodeLogic(t, nil)
 		defer s.Close()
 
@@ -700,10 +705,10 @@ func TestSendRegisterCodeLogic_validateRequest(t *testing.T) {
 
 		err := logic.validateRequest(req)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "无效的验证码请求类型")
+		assert.True(t, isCodeError(err, errs.CodeInvalidParam), "应该是参数错误")
 	})
 
-	t.Run("大小写敏感的类型验证", func(t *testing.T) {
+	t.Run("大小写敏感的类型验证返回参数错误", func(t *testing.T) {
 		logic, s := newTestSendRegisterCodeLogic(t, nil)
 		defer s.Close()
 
@@ -715,6 +720,308 @@ func TestSendRegisterCodeLogic_validateRequest(t *testing.T) {
 
 		err := logic.validateRequest(req)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "无效的验证码请求类型")
+		assert.True(t, isCodeError(err, errs.CodeInvalidParam), "应该是参数错误")
+	})
+}
+
+// MockUsersModelForSendCode 用于 SendRegisterCode 测试的 UsersModel mock
+type MockUsersModelForSendCode struct {
+	mock.Mock
+}
+
+func (m *MockUsersModelForSendCode) Insert(ctx context.Context, data *model.Users) (sql.Result, error) {
+	args := m.Called(ctx, data)
+	return args.Get(0).(sql.Result), args.Error(1)
+}
+
+func (m *MockUsersModelForSendCode) FindOne(ctx context.Context, id int64) (*model.Users, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Users), args.Error(1)
+}
+
+func (m *MockUsersModelForSendCode) FindOneByEmail(ctx context.Context, email string) (*model.Users, error) {
+	args := m.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Users), args.Error(1)
+}
+
+func (m *MockUsersModelForSendCode) FindOneBySnowflakeId(ctx context.Context, snowflakeId int64) (*model.Users, error) {
+	args := m.Called(ctx, snowflakeId)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Users), args.Error(1)
+}
+
+func (m *MockUsersModelForSendCode) Update(ctx context.Context, data *model.Users) error {
+	args := m.Called(ctx, data)
+	return args.Error(0)
+}
+
+func (m *MockUsersModelForSendCode) Delete(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+// newTestSendRegisterCodeLogicWithMock 创建带 mock 的测试逻辑
+func newTestSendRegisterCodeLogicWithMock(t *testing.T, mockClient *mockKqPusherClient, mockUsersModel *MockUsersModelForSendCode) (*SendRegisterCodeLogic, *miniredis.Miniredis) {
+	s := miniredis.RunT(t)
+	conf := redis.RedisConf{
+		Host: s.Addr(),
+		Type: "node",
+	}
+	r := redis.MustNewRedis(conf)
+
+	ctx := context.Background()
+	svcCtx := &svc.ServiceContext{
+		Config: config.Config{
+			Register: config.Register{
+				SendCodeConfig: config.SendCodeConfig{
+					ReceiveType:    "email",
+					ExpireIn:       300,
+					RetryAfter:     60,
+					RedisKeyPrefix: "register:code",
+					ReminderType: struct {
+						Registered string
+					}{
+						Registered: "email_registered_reminder",
+					},
+				},
+			},
+		},
+		Redis:          r,
+		KqPusherClient: mockClient,
+		UsersModel:     mockUsersModel,
+	}
+
+	logic := NewSendRegisterCodeLogic(ctx, svcCtx)
+	return logic, s
+}
+
+func TestSendRegisterCodeLogic_SendRegisterCode(t *testing.T) {
+	t.Run("成功发送验证码", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{}
+		mockUsersModel := new(MockUsersModelForSendCode)
+		logic, s := newTestSendRegisterCodeLogicWithMock(t, mockClient, mockUsersModel)
+		defer s.Close()
+
+		email := "test@example.com"
+
+		// 设置 mock 期望 - 邮箱未注册
+		mockUsersModel.On("FindOneByEmail", logic.ctx, email).Return(nil, sqlx.ErrNotFound)
+
+		req := &types.SendCodeReq{
+			Email: email,
+			Type:  "email",
+		}
+
+		resp, err := logic.SendRegisterCode(req)
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, 60, resp.RetryAfter)
+		assert.Len(t, mockClient.messages, 1, "应该发送一条消息到MQ")
+
+		// 验证验证码已保存到 Redis
+		verifyKey := logic.buildVerifyKey(email)
+		code, err := logic.svcCtx.Redis.HgetCtx(logic.ctx, verifyKey, "code")
+		require.NoError(t, err)
+		assert.NotEmpty(t, code)
+		assert.Equal(t, 6, len(code))
+
+		mockUsersModel.AssertExpectations(t)
+	})
+
+	t.Run("邮箱已注册发送提醒邮件", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{}
+		mockUsersModel := new(MockUsersModelForSendCode)
+		logic, s := newTestSendRegisterCodeLogicWithMock(t, mockClient, mockUsersModel)
+		defer s.Close()
+
+		email := "existing@example.com"
+
+		// 设置 mock 期望 - 邮箱已注册
+		existingUser := &model.Users{
+			Id:    1,
+			Email: email,
+		}
+		mockUsersModel.On("FindOneByEmail", logic.ctx, email).Return(existingUser, nil)
+
+		req := &types.SendCodeReq{
+			Email: email,
+			Type:  "email",
+		}
+
+		resp, err := logic.SendRegisterCode(req)
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, 60, resp.RetryAfter)
+		assert.Len(t, mockClient.messages, 1, "应该发送提醒邮件到MQ")
+
+		// 验证发送的是提醒邮件类型
+		var msg types.VerificationCodeMessage
+		err = json.Unmarshal([]byte(mockClient.messages[0]), &msg)
+		require.NoError(t, err)
+		assert.Equal(t, "email_registered_reminder", msg.Type)
+		assert.Empty(t, msg.Code)
+
+		mockUsersModel.AssertExpectations(t)
+	})
+
+	t.Run("请求验证失败返回错误", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{}
+		mockUsersModel := new(MockUsersModelForSendCode)
+		logic, s := newTestSendRegisterCodeLogicWithMock(t, mockClient, mockUsersModel)
+		defer s.Close()
+
+		// 无效的请求类型
+		req := &types.SendCodeReq{
+			Email: "test@example.com",
+			Type:  "invalid_type",
+		}
+
+		resp, err := logic.SendRegisterCode(req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		assert.True(t, isCodeError(err, errs.CodeInvalidParam), "应该是参数错误")
+		assert.Len(t, mockClient.messages, 0, "不应该发送消息到MQ")
+	})
+
+	t.Run("数据库查询失败返回内部错误", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{}
+		mockUsersModel := new(MockUsersModelForSendCode)
+		logic, s := newTestSendRegisterCodeLogicWithMock(t, mockClient, mockUsersModel)
+		defer s.Close()
+
+		email := "test@example.com"
+
+		// 设置 mock 期望 - 数据库查询失败
+		mockUsersModel.On("FindOneByEmail", logic.ctx, email).Return(nil, errors.New("database connection failed"))
+
+		req := &types.SendCodeReq{
+			Email: email,
+			Type:  "email",
+		}
+
+		resp, err := logic.SendRegisterCode(req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+		assert.Len(t, mockClient.messages, 0, "不应该发送消息到MQ")
+
+		mockUsersModel.AssertExpectations(t)
+	})
+
+	t.Run("限流检查失败返回错误", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{}
+		mockUsersModel := new(MockUsersModelForSendCode)
+		logic, s := newTestSendRegisterCodeLogicWithMock(t, mockClient, mockUsersModel)
+		defer s.Close()
+
+		email := "test@example.com"
+
+		// 设置 mock 期望 - 邮箱未注册
+		mockUsersModel.On("FindOneByEmail", logic.ctx, email).Return(nil, sqlx.ErrNotFound)
+
+		// 先触发限流
+		req := &types.SendCodeReq{
+			Email: email,
+			Type:  "email",
+		}
+		_, err := logic.SendRegisterCode(req)
+		require.NoError(t, err)
+
+		// 再次发送应该被限流
+		resp, err := logic.SendRegisterCode(req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		assert.True(t, isCodeError(err, errs.CodeInvalidParam), "应该是参数错误（限流）")
+
+		mockUsersModel.AssertExpectations(t)
+	})
+
+	t.Run("MQ发送失败清理数据", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{
+			pushFunc: func(ctx context.Context, v string) error {
+				return errors.New("mq connection failed")
+			},
+		}
+		mockUsersModel := new(MockUsersModelForSendCode)
+		logic, s := newTestSendRegisterCodeLogicWithMock(t, mockClient, mockUsersModel)
+		defer s.Close()
+
+		email := "test@example.com"
+
+		// 设置 mock 期望 - 邮箱未注册
+		mockUsersModel.On("FindOneByEmail", logic.ctx, email).Return(nil, sqlx.ErrNotFound)
+
+		req := &types.SendCodeReq{
+			Email: email,
+			Type:  "email",
+		}
+
+		// 先保存验证码到 Redis
+		verifyKey := logic.buildVerifyKey(email)
+		err := logic.svcCtx.Redis.HsetCtx(logic.ctx, verifyKey, "code", "123456")
+		require.NoError(t, err)
+
+		resp, err := logic.SendRegisterCode(req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+
+		// 验证验证码数据已被清理
+		exists, _ := logic.svcCtx.Redis.ExistsCtx(logic.ctx, verifyKey)
+		assert.False(t, exists, "验证码数据应该被清理")
+
+		// 验证限流键也被清理
+		limitKey := logic.buildLimitKey(email)
+		exists, _ = logic.svcCtx.Redis.ExistsCtx(logic.ctx, limitKey)
+		assert.False(t, exists, "限流键应该被清理")
+
+		mockUsersModel.AssertExpectations(t)
+	})
+
+	t.Run("邮箱已注册时MQ发送失败返回错误", func(t *testing.T) {
+		mockClient := &mockKqPusherClient{
+			pushFunc: func(ctx context.Context, v string) error {
+				return errors.New("mq connection failed")
+			},
+		}
+		mockUsersModel := new(MockUsersModelForSendCode)
+		logic, s := newTestSendRegisterCodeLogicWithMock(t, mockClient, mockUsersModel)
+		defer s.Close()
+
+		email := "existing@example.com"
+
+		// 设置 mock 期望 - 邮箱已注册
+		existingUser := &model.Users{
+			Id:    1,
+			Email: email,
+		}
+		mockUsersModel.On("FindOneByEmail", logic.ctx, email).Return(existingUser, nil)
+
+		req := &types.SendCodeReq{
+			Email: email,
+			Type:  "email",
+		}
+
+		resp, err := logic.SendRegisterCode(req)
+
+		require.Error(t, err)
+		assert.Nil(t, resp)
+		assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+
+		mockUsersModel.AssertExpectations(t)
 	})
 }

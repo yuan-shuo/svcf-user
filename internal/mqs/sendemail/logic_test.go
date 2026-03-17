@@ -322,3 +322,204 @@ func TestSendEmail_sendVerifyCodeEmail_EmailContent(t *testing.T) {
 		})
 	}
 }
+
+func TestSendEmail_sendAlreadyRegisteredReminderEmail(t *testing.T) {
+	tests := []struct {
+		name    string
+		svcCtx  *svc.ServiceContext
+		msg     *types.VerificationCodeMessage
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "缺少SMTP配置-设置发件人失败",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "",
+						Port: 0,
+						From: "",
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Receiver: "test@example.com",
+				Type:     "reminder_registered",
+			},
+			wantErr: true,
+			errMsg:  "设置发件人失败",
+		},
+		{
+			name: "无效的发件人地址",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "smtp.example.com",
+						Port: 587,
+						From: "invalid-email",
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Receiver: "test@example.com",
+				Type:     "reminder_registered",
+			},
+			wantErr: true,
+			errMsg:  "设置发件人失败",
+		},
+		{
+			name: "无效的收件人地址",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "smtp.example.com",
+						Port: 587,
+						From: "sender@example.com",
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Receiver: "invalid-email",
+				Type:     "reminder_registered",
+			},
+			wantErr: true,
+			errMsg:  "设置收件人失败",
+		},
+		{
+			name: "无法连接到SMTP服务器-发送邮件失败",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "invalid.smtp.host.example.com",
+						Port: 587,
+						From: "sender@example.com",
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Receiver: "test@example.com",
+				Type:     "reminder_registered",
+			},
+			wantErr: true,
+			errMsg:  "发送邮件失败",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			s := NewSendEmail(ctx, tt.svcCtx)
+
+			err := s.sendAlreadyRegisteredReminderEmail(tt.msg)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSendEmail_sendPlainTextMail(t *testing.T) {
+	tests := []struct {
+		name     string
+		svcCtx   *svc.ServiceContext
+		from     string
+		receiver string
+		subject  string
+		body     string
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name: "缺少SMTP配置-设置发件人失败",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "",
+						Port: 0,
+						From: "",
+					},
+				},
+			},
+			from:     "",
+			receiver: "test@example.com",
+			subject:  "测试主题",
+			body:     "测试内容",
+			wantErr:  true,
+			errMsg:   "设置发件人失败",
+		},
+		{
+			name: "无效的发件人地址",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "smtp.example.com",
+						Port: 587,
+						From: "sender@example.com",
+					},
+				},
+			},
+			from:     "invalid-email",
+			receiver: "test@example.com",
+			subject:  "测试主题",
+			body:     "测试内容",
+			wantErr:  true,
+			errMsg:   "设置发件人失败",
+		},
+		{
+			name: "无效的收件人地址",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "smtp.example.com",
+						Port: 587,
+						From: "sender@example.com",
+					},
+				},
+			},
+			from:     "sender@example.com",
+			receiver: "invalid-email",
+			subject:  "测试主题",
+			body:     "测试内容",
+			wantErr:  true,
+			errMsg:   "设置收件人失败",
+		},
+		{
+			name: "无法连接到SMTP服务器-发送邮件失败",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "invalid.smtp.host.example.com",
+						Port: 587,
+						From: "sender@example.com",
+					},
+				},
+			},
+			from:     "sender@example.com",
+			receiver: "test@example.com",
+			subject:  "测试主题",
+			body:     "测试内容",
+			wantErr:  true,
+			errMsg:   "发送邮件失败",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			s := NewSendEmail(ctx, tt.svcCtx)
+
+			err := s.sendPlainTextMail(tt.from, tt.receiver, tt.subject, tt.body)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
