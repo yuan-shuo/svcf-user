@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // MockUsersModel 模拟 UsersModel
@@ -376,23 +375,6 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	assert.Nil(t, resp)
 	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
-}
-
-func TestRegisterLogic_hashPassword(t *testing.T) {
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, nil)
-
-	password := "testpassword123"
-
-	hashed, err := logic.hashPassword(password)
-
-	assert.NoError(t, err)
-	assert.NotEmpty(t, hashed)
-	assert.NotEqual(t, password, hashed)
-
-	// 验证密码可以正确比对
-	err = bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password))
-	assert.NoError(t, err)
 }
 
 func TestRegisterLogic_buildVerifyKey(t *testing.T) {

@@ -17,7 +17,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type RegisterLogic struct {
@@ -47,7 +46,7 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	}
 
 	// 密码加密
-	hashedPassword, err := l.hashPassword(req.Password)
+	hashedPassword, err := utils.HashPassword(req.Password)
 	if err != nil {
 		// 记录详细错误日志
 		logx.Errorf("密码加密失败, email=%s, err=%w", req.Email, err)
@@ -131,15 +130,6 @@ func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) err
 	}
 
 	return nil
-}
-
-// 密码加密
-func (l *RegisterLogic) hashPassword(password string) (string, error) {
-	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashed), nil
 }
 
 // 标记验证码为已使用
