@@ -504,6 +504,24 @@ func TestRegisterLogic_checkIfEmailHasBeenRegistered_Found(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
+func TestRegisterLogic_checkIfEmailHasBeenRegistered_DatabaseError(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupTest(t)
+
+	ctx := context.Background()
+	logic := NewRegisterLogic(ctx, svcCtx)
+
+	email := "test@example.com"
+
+	// 设置 mock 期望 - 数据库查询出错
+	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, errors.New("database connection failed"))
+
+	err := logic.checkIfEmailHasBeenRegistered(email)
+
+	assert.Error(t, err)
+	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	mockUsersModel.AssertExpectations(t)
+}
+
 func TestRegisterLogic_verfiyEmailAndCodeInRedis_Success(t *testing.T) {
 	s, _, _, svcCtx := setupTest(t)
 	defer s.Close()

@@ -1,21 +1,22 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
-// validateEmail 未实现
-
 package account_noauth
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/mail"
 	"time"
 
+	"user/internal/errs"
 	"user/internal/svc"
 	"user/internal/types"
 	"user/internal/utils"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 const (
@@ -40,20 +41,29 @@ func NewSendRegisterCodeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *types.SendCodeResp, err error) {
-	// 验证请求
+	// 验证请求（验证码类型及邮箱格式）
 	if err := l.validateRequest(req); err != nil {
 		return nil, err
 	}
 
-	// 26-03-14: 这个邮箱验证需要配合用户模型，同时还需要控制验证力度，后续构建
-	// // 邮箱验证子模块
-	// if err := l.validateEmail(req.Email); err != nil {
-	// 	return nil, err
-	// }
-
 	// 检查限流
 	if err := l.checkRateLimit(req.Email); err != nil {
 		return nil, err
+	}
+
+	// 检查邮箱是否被注册过
+	_, err = l.svcCtx.UsersModel.FindOneByEmail(l.ctx, req.Email)
+	if err == nil {
+		// 邮箱已存在
+		if err = l.sendReminderEmailRegisteredToMQ(req.Email); err != nil {
+			return nil, err
+		}
+		return l.buildResponse(), nil
+	}
+	if err != sqlx.ErrNotFound {
+		// 数据库查询出错
+		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%w", req.Email, err)
+		return nil, errs.New(errs.CodeInternalError)
 	}
 
 	// 清理未使用的验证码
@@ -84,10 +94,17 @@ func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *
 // 1. 请求验证模块
 func (l *SendRegisterCodeLogic) validateRequest(req *types.SendCodeReq) error {
 	if req == nil {
-		return fmt.Errorf("请求不能为空")
+		return errs.New(errs.CodeInvalidParam)
 	}
+	// 检查验证码类型是否正确
 	if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
-		return fmt.Errorf("无效的验证码请求类型: %s", req.Type)
+		logx.Errorf("无效的验证码请求类型, type=%s, expected=%s", req.Type, l.svcCtx.Config.Register.SendCodeConfig.ReceiveType)
+		return errs.New(errs.CodeInvalidParam)
+	}
+	// 验证邮箱格式
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		logx.Errorf("邮箱格式不正确, email=%s, err=%w", req.Email, err)
+		return errs.New(errs.CodeInvalidParam)
 	}
 	return nil
 }
@@ -101,13 +118,15 @@ func (l *SendRegisterCodeLogic) checkRateLimit(email string) error {
 	// 这是一个原子操作，Redis保证不会被打断
 	ok, err := l.svcCtx.Redis.SetnxExCtx(l.ctx, limitKey, "1", retryAfter)
 	if err != nil {
-		return fmt.Errorf("限流检查失败: %w", err)
+		logx.Errorf("限流检查失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 
 	if !ok {
 		// key已存在，获取剩余时间
 		ttl, _ := l.svcCtx.Redis.Ttl(limitKey)
-		return fmt.Errorf("发送过于频繁，请%d秒后重试", ttl)
+		logx.Errorf("发送过于频繁, email=%s, ttl=%d", email, ttl)
+		return errs.New(errs.CodeInvalidParam, fmt.Sprintf("发送过于频繁，请%d秒后重试", ttl))
 	}
 
 	return nil // 设置成功，可以发送
@@ -133,7 +152,8 @@ func (l *SendRegisterCodeLogic) saveCodeToRedis(email, code string) error {
 		redisValue,
 		l.svcCtx.Config.Register.SendCodeConfig.ExpireIn,
 	); err != nil {
-		return fmt.Errorf("注册验证码缓存失败: %w", err)
+		logx.Errorf("注册验证码缓存失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 	return nil
 }
@@ -149,11 +169,34 @@ func (l *SendRegisterCodeLogic) sendToMQ(email, code string) error {
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("消息序列化失败: %w", err)
+		logx.Errorf("消息序列化失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 
 	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
-		return fmt.Errorf("消息队列推送失败: %w", err)
+		logx.Errorf("消息队列推送失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
+	}
+	return nil
+}
+
+// 5. MQ 消息发送模块（邮件提示已注册）
+func (l *SendRegisterCodeLogic) sendReminderEmailRegisteredToMQ(email string) error {
+	msg := types.VerificationCodeMessage{
+		Receiver:  email,
+		Type:      l.svcCtx.Config.Register.SendCodeConfig.ReminderType.Registered,
+		Timestamp: time.Now().Unix(),
+	}
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		logx.Errorf("消息序列化失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
+	}
+
+	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
+		logx.Errorf("消息队列推送失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
 	}
 	return nil
 }

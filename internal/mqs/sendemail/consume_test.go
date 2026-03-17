@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"user/internal/config"
 	"user/internal/svc"
 	"user/internal/types"
 
@@ -27,6 +28,7 @@ func TestSendEmail_Consume(t *testing.T) {
 		name    string
 		key     string
 		val     string
+		svcCtx  *svc.ServiceContext
 		wantErr bool
 		errMsg  string
 	}{
@@ -43,6 +45,20 @@ func TestSendEmail_Consume(t *testing.T) {
 				data, _ := json.Marshal(msg)
 				return string(data)
 			}(),
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					Register: config.Register{
+						SendCodeConfig: config.SendCodeConfig{
+							ReceiveType: "register",
+						},
+					},
+					SmtpConfig: config.SmtpConfig{
+						Host: "",
+						Port: 0,
+						From: "",
+					},
+				},
+			},
 			wantErr: true,
 			errMsg:  "设置发件人失败",
 		},
@@ -50,26 +66,42 @@ func TestSendEmail_Consume(t *testing.T) {
 			name:    "无效的JSON格式",
 			key:     "test-key",
 			val:     "invalid json",
+			svcCtx:  &svc.ServiceContext{},
 			wantErr: true,
-			errMsg:  "邮箱验证码发送失败",
+			errMsg:  "消息解析失败",
 		},
 		{
 			name:    "空的JSON值",
 			key:     "test-key",
 			val:     "",
+			svcCtx:  &svc.ServiceContext{},
 			wantErr: true,
-			errMsg:  "邮箱验证码发送失败",
+			errMsg:  "消息解析失败",
 		},
 		{
-			name: "缺少必填字段的JSON",
+			name: "缺少必填字段的JSON-类型为register",
 			key:  "test-key",
-			val:  `{"code": "123456"}`,
-			// 解析不会报错，但缺少的字段会是零值
+			val:  `{"code": "123456", "type": "register"}`,
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					Register: config.Register{
+						SendCodeConfig: config.SendCodeConfig{
+							ReceiveType: "register",
+						},
+					},
+					SmtpConfig: config.SmtpConfig{
+						Host: "",
+						Port: 0,
+						From: "",
+					},
+				},
+			},
+			// type 匹配 register，会尝试发送验证码邮件，但缺少 SMTP 配置会失败
 			wantErr: true,
 			errMsg:  "设置发件人失败",
 		},
 		{
-			name: "复杂JSON结构-缺少SMTP配置",
+			name: "复杂JSON结构-未知类型",
 			key:  "test-key",
 			val: func() string {
 				msg := types.VerificationCodeMessage{
@@ -81,16 +113,27 @@ func TestSendEmail_Consume(t *testing.T) {
 				data, _ := json.Marshal(msg)
 				return string(data)
 			}(),
-			wantErr: true,
-			errMsg:  "设置发件人失败",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					Register: config.Register{
+						SendCodeConfig: config.SendCodeConfig{
+							ReceiveType: "register",
+							ReminderType: config.ReminderType{
+								Registered: "reminder_registered",
+							},
+						},
+					},
+				},
+			},
+			// 未知类型返回 nil，不阻塞队列
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			svcCtx := &svc.ServiceContext{}
-			s := NewSendEmail(ctx, svcCtx)
+			s := NewSendEmail(ctx, tt.svcCtx)
 
 			err := s.Consume(ctx, tt.key, tt.val)
 
@@ -170,4 +213,70 @@ func TestSendEmail_StructFields(t *testing.T) {
 	// 验证结构体字段可访问
 	assert.NotNil(t, s.ctx)
 	assert.NotNil(t, s.svcCtx)
+}
+
+func TestSendEmail_Consume_ReminderRegistered(t *testing.T) {
+	ctx := context.Background()
+	svcCtx := &svc.ServiceContext{
+		Config: config.Config{
+			SmtpConfig: config.SmtpConfig{
+				Host: "",
+				Port: 0,
+				From: "",
+			},
+			Register: config.Register{
+				SendCodeConfig: config.SendCodeConfig{
+					ReceiveType: "register",
+					ReminderType: config.ReminderType{
+						Registered: "reminder_registered",
+					},
+				},
+			},
+		},
+	}
+	s := NewSendEmail(ctx, svcCtx)
+
+	msg := types.VerificationCodeMessage{
+		Code:      "",
+		Receiver:  "test@example.com",
+		Type:      "reminder_registered",
+		Timestamp: 1234567890,
+	}
+	data, _ := json.Marshal(msg)
+
+	err := s.Consume(ctx, "test-key", string(data))
+
+	// 由于缺少SMTP配置，会返回错误
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "设置发件人失败")
+}
+
+func TestSendEmail_Consume_UnknownType(t *testing.T) {
+	ctx := context.Background()
+	svcCtx := &svc.ServiceContext{
+		Config: config.Config{
+			Register: config.Register{
+				SendCodeConfig: config.SendCodeConfig{
+					ReceiveType: "register",
+					ReminderType: config.ReminderType{
+						Registered: "reminder_registered",
+					},
+				},
+			},
+		},
+	}
+	s := NewSendEmail(ctx, svcCtx)
+
+	msg := types.VerificationCodeMessage{
+		Code:      "123456",
+		Receiver:  "test@example.com",
+		Type:      "unknown_type",
+		Timestamp: 1234567890,
+	}
+	data, _ := json.Marshal(msg)
+
+	err := s.Consume(ctx, "test-key", string(data))
+
+	// 未知类型应该返回 nil，不阻塞队列
+	require.NoError(t, err)
 }

@@ -8,6 +8,8 @@ Register:
     ExpireIn: 300
     RetryAfter: 60
     RedisKeyPrefix: "account"
+    ReminderType:
+      Registered: "reminder_registered"
 
 KqConsumerConf:
   Name: kqConsumer

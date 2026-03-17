@@ -47,6 +47,12 @@ type SendCodeConfig struct {
 	ExpireIn       int
 	RetryAfter     int
 	RedisKeyPrefix string // 存放于redis时使用的键名前缀, 给入a则redis.key=a:receiver_email
+	ReminderType   ReminderType
+}
+
+// 提醒类型消息
+type ReminderType struct {
+	Registered string // 邮箱已注册
 }
 
 // 邮件发送配置

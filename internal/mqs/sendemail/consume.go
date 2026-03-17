@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"user/internal/svc"
 	"user/internal/types"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 type SendEmail struct {
@@ -23,7 +25,18 @@ func NewSendEmail(ctx context.Context, svcCtx *svc.ServiceContext) *SendEmail {
 func (l *SendEmail) Consume(ctx context.Context, key, val string) error {
 	var msg types.VerificationCodeMessage
 	if err := json.Unmarshal([]byte(val), &msg); err != nil {
-		return fmt.Errorf("邮箱验证码发送失败: %w", err)
+		return fmt.Errorf("消息解析失败: %w", err)
 	}
-	return l.sendVerifyCodeEmail(&msg)
+	// 根据消息类型分发到不同的处理器
+	switch msg.Type {
+	case l.svcCtx.Config.Register.SendCodeConfig.ReceiveType: // "register"
+		return l.sendVerifyCodeEmail(&msg)
+
+	case l.svcCtx.Config.Register.SendCodeConfig.ReminderType.Registered: // "reminder_registered"
+		return l.sendAlreadyRegisteredReminderEmail(&msg)
+
+	default:
+		logx.Errorf("未知的消息类型: %s", msg.Type)
+		return nil // 不返回错误，避免阻塞队列
+	}
 }
