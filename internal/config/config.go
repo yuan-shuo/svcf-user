@@ -14,8 +14,8 @@ type Config struct {
 	Register Register
 
 	KqConsumerConf kq.KqConf // 消息队列消费者配置
-	KqPusherConf   KqPusherConf
-	SmtpConfig     SmtpConfig
+
+	SmtpConfig SmtpConfig // 邮件发送配置
 
 	RedisConfig redis.RedisConf // redis配置
 
@@ -23,17 +23,13 @@ type Config struct {
 	CacheRedis cache.CacheConf // 缓存数据库配置
 
 	rest.RestConf
+
+	// KqPusherConf   KqPusherConf
 }
 
 // pg数据库配置
 type PostgreSQL struct {
 	Datasource string
-}
-
-// 消息队列生产者配置
-type KqPusherConf struct {
-	Brokers []string
-	Topic   string
 }
 
 // 注册配置
@@ -63,3 +59,9 @@ type SmtpConfig struct {
 	Password string
 	From     string
 }
+
+// // 消息队列生产者配置 暂时废弃
+// type KqPusherConf struct {
+// 	Brokers []string
+// 	Topic   string
+// }

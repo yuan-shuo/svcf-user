@@ -39,8 +39,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return &ServiceContext{
 		Config: c,
 		KqPusherClient: kq.NewPusher(
-			c.KqPusherConf.Brokers,
-			c.KqPusherConf.Topic,
+			// 生产者复用消费者brokers配置和topic，保持一致
+			c.KqConsumerConf.Brokers,
+			c.KqConsumerConf.Topic,
+			// c.KqPusherConf.Brokers, // 已废弃KqPusherConf
+			// c.KqPusherConf.Topic,
 			kq.WithAllowAutoTopicCreation(),
 		),
 		Redis:      db.NewRedis(c.RedisConfig),

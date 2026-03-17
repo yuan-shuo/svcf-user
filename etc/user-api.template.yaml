@@ -2,47 +2,102 @@ Name: user-api
 Host: 0.0.0.0
 Port: 8888
 
-Register:
-  SendCodeConfig:
-    ReceiveType: "register"
-    ExpireIn: 300
-    RetryAfter: 60
-    RedisKeyPrefix: "account"
-    ReminderType:
-      Registered: "reminder_registered"
+# postgreSQL数据库配置
+PostgreSQL:
 
-KqConsumerConf:
-  Name: kqConsumer
-  Brokers:
-    - localhost:9092
-  Group: kqConsumer
-  Topic: my-topic
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  # 数据库链接
+  Datasource: "postgres://username:123456@127.0.0.1:5432/user_db?sslmode=disable"
 
-KqPusherConf:
-  Brokers:
-    - localhost:9092
-  Topic: my-topic
-
+# 邮件发送服务配置
 SmtpConfig:
+
+  # SMTP服务地址
   Host: localhost
   Port: 1025
+
+  # SMTP服务用户名及密码
   Username: ""
   Password: ""
+
+  # 发件人邮箱
   From: noreply@test.com
 
+# --- 以下配置，如果是用容器跑的，不太需要有改动了 ---
+
+# kafka消费者配置
+KqConsumerConf:
+
+  # 服务名，跟kq.KqConf没关系，service.ServiceConf要求的字段，不写会跑不起来消费者
+  Name: kqConsumerSendEmail
+
+  # (复用) kafka节点地址，生产者配置复用此值保持绝对一致
+  Brokers:
+    - localhost:9092
+
+  # 消费者组
+  Group: kqConsumerSendEmail
+
+  # (复用) 消费者主题，生产者配置复用此值保持绝对一致
+  Topic: user-sendmail-topic
+
+  # 消费者起始偏移量设置
+  # first: 从最早可用消息开始消费
+  # last: 从最新消息开始消费
+  # 时间戳: 从指定时间点之后的消息开始消费（如 2024-01-01T00:00:00）
+  Offset: first
+
+  # 消费者实例数量
+  Consumers: 1
+
+  # 消息处理器线程数
+  Processors: 1
+
+# 业务redis数据库配置
 RedisConfig:
-  Host: "localhost:6379"
+
+  # redis数据库地址
+  Host: localhost:6379
+
+  # 其他可选参数
   Type: node
   Tls: false
   NonBlock: true
   PingTimeout: 1s
 
-PostgreSQL:
-  datasource: "postgres://username:123456@127.0.0.1:5432/user_db?sslmode=disable"
+# postgreSQL查询缓存redis配置
 CacheRedis:
-  - Host: 127.0.0.1:6379
+  - Host: localhost:6379
     Type: node
     Pass: ""
+
+# 注册配置
+Register:
+
+  # 验证码发送配置，可以放着不管不改也不会有事，不关心可以跳过整个字段
+  SendCodeConfig:
+
+    # 注册验证码类型，用于redis存储hash验证码和消息队列的类型字段
+    ReceiveType: register
+
+    # 注册码有效时间，超过此时间就会被redis清理，单位：s
+    ExpireIn: 300
+
+    # 注册码请求间隔时间，防止频繁请求，单位：s
+    RetryAfter: 60
+
+    # redis数据库存储注册验证码使用的键的前缀
+    RedisKeyPrefix: account
+
+    # 邮件提示验证码类型
+    ReminderType:
+      # 用于提示消息队列的对应消息应用于发送已注册邮箱邮件
+      Registered: reminder_registered
+
+
+# --- 以下配置已废弃 ---
+
+# (2026-03-17 #1) 废弃原因: 照着gozero官方写的，但是这个场景为啥要让brokers和topic不一致?
+# KqPusherConf:
+#   Brokers:
+#     - localhost:9092
+#   Topic: my-topic

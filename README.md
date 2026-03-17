@@ -5,8 +5,15 @@ microservice frame of user function: 用户微服务框架
 
 ## 更新计划
 
-1. 邮箱验证码功能：提前检查邮箱格式及是否注册过
-2. 邮箱验证码功能：单元测试
+1. 登录功能
+
+## 核心模块
+
+1. (svc) user.go 用户系统微服务 
+2. (svc) cmd/mqs 微服务消费者
+3. (job) cmd/migrate 数据库迁移工具 (需要配合go-migrate工具使用)
+
+# 其他
 
 ## 数据库模型生成
 
