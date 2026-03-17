@@ -9,13 +9,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/mail"
 	"time"
 
+	"user/internal/errs"
 	"user/internal/svc"
 	"user/internal/types"
 	"user/internal/utils"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 const (
@@ -40,16 +43,25 @@ func NewSendRegisterCodeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *types.SendCodeResp, err error) {
-	// 验证请求
+	// 验证请求（验证码类型及邮箱格式）
 	if err := l.validateRequest(req); err != nil {
 		return nil, err
 	}
 
-	// 26-03-14: 这个邮箱验证需要配合用户模型，同时还需要控制验证力度，后续构建
-	// // 邮箱验证子模块
-	// if err := l.validateEmail(req.Email); err != nil {
-	// 	return nil, err
-	// }
+	// 检查邮箱是否被注册过
+	_, err = l.svcCtx.UsersModel.FindOneByEmail(l.ctx, req.Email)
+	if err == nil {
+		// 邮箱已存在
+		if err = l.sendReminderEmailRegisteredToMQ(req.Email); err != nil {
+			return nil, err
+		}
+		return l.buildResponse(), nil
+	}
+	if err != sqlx.ErrNotFound {
+		// 数据库查询出错
+		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%w", req.Email, err)
+		return nil, errs.New(errs.CodeInternalError)
+	}
 
 	// 检查限流
 	if err := l.checkRateLimit(req.Email); err != nil {
@@ -86,9 +98,30 @@ func (l *SendRegisterCodeLogic) validateRequest(req *types.SendCodeReq) error {
 	if req == nil {
 		return fmt.Errorf("请求不能为空")
 	}
+	// 检查验证码类型是否正确
 	if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
 		return fmt.Errorf("无效的验证码请求类型: %s", req.Type)
 	}
+	// 验证邮箱格式
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		return fmt.Errorf("邮箱格式不正确: %w", err)
+	}
+	return nil
+}
+
+// 检查邮箱是否被注册
+func (l *SendRegisterCodeLogic) checkIfEmailHasBeenRegistered(email string) error {
+	_, err := l.svcCtx.UsersModel.FindOneByEmail(l.ctx, email)
+	if err == nil {
+		// 邮箱已存在
+		return errs.New(errs.CodeEmailRegistered)
+	}
+	if err != sqlx.ErrNotFound {
+		// 数据库查询出错
+		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%w", email, err)
+		return errs.New(errs.CodeInternalError)
+	}
+	// 未找到，说明邮箱未注册
 	return nil
 }
 
@@ -144,6 +177,25 @@ func (l *SendRegisterCodeLogic) sendToMQ(email, code string) error {
 		Code:      code,
 		Receiver:  email,
 		Type:      l.svcCtx.Config.Register.SendCodeConfig.ReceiveType,
+		Timestamp: time.Now().Unix(),
+	}
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("消息序列化失败: %w", err)
+	}
+
+	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
+		return fmt.Errorf("消息队列推送失败: %w", err)
+	}
+	return nil
+}
+
+// 5. MQ 消息发送模块（邮件提示已注册）
+func (l *SendRegisterCodeLogic) sendReminderEmailRegisteredToMQ(email string) error {
+	msg := types.VerificationCodeMessage{
+		Receiver:  email,
+		Type:      l.svcCtx.Config.Register.SendCodeConfig.ReminderType.Registered,
 		Timestamp: time.Now().Unix(),
 	}
 
