@@ -46,6 +46,11 @@ func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *
 		return nil, err
 	}
 
+	// 检查限流
+	if err := l.checkRateLimit(req.Email); err != nil {
+		return nil, err
+	}
+
 	// 检查邮箱是否被注册过
 	_, err = l.svcCtx.UsersModel.FindOneByEmail(l.ctx, req.Email)
 	if err == nil {
@@ -59,11 +64,6 @@ func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *
 		// 数据库查询出错
 		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%w", req.Email, err)
 		return nil, errs.New(errs.CodeInternalError)
-	}
-
-	// 检查限流
-	if err := l.checkRateLimit(req.Email); err != nil {
-		return nil, err
 	}
 
 	// 清理未使用的验证码
