@@ -3,6 +3,18 @@
 
 package types
 
+type LoginReq struct {
+	Email      string `json:"email"`                             // 邮箱
+	Password   string `json:"password"`                          // 密码
+	RememberMe bool   `json:"rememberMe,optional,default=false"` // 记住我，默认 false
+}
+
+type LoginResp struct {
+	AccessToken  string `json:"accessToken"`  // 短期令牌，单位:秒
+	RefreshToken string `json:"refreshToken"` // 长期令牌，单位:秒
+	ExpiresIn    int64  `json:"expiresIn"`    // AccessToken 有效期，单位:秒
+}
+
 type RegisterReq struct {
 	Email    string `json:"email"`    // 邮箱
 	Password string `json:"password"` // 密码

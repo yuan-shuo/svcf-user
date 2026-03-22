@@ -22,9 +22,19 @@ type Config struct {
 	PostgreSQL PostgreSQL      // pg数据库配置
 	CacheRedis cache.CacheConf // 缓存数据库配置
 
+	Auth          Auth   // jwt认证配置
+	RefreshSecret string // Refresh Token 签名密钥
+	RefreshExpire int64  // Refresh Token 有效期
+
 	rest.RestConf
 
 	// KqPusherConf   KqPusherConf
+}
+
+// jwt认证配置
+type Auth struct {
+	AccessSecret string // Access Token 签名密钥
+	AccessExpire int64  // Access Token 有效期
 }
 
 // pg数据库配置

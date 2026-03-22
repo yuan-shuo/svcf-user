@@ -4,7 +4,7 @@ syntax = "v1"
 // goctl api validate --api user.api
 @server (
 	group:  account_noauth
-	prefix: api/account/v1
+	prefix: api/account/v1/noauth
 )
 service user-api {
 	// 发送注册验证码
@@ -14,6 +14,10 @@ service user-api {
 	// 邮箱注册
 	@handler register
 	post /register (RegisterReq) returns (RegisterResp)
+
+	// 用户登录
+	@handler login
+	post /login (LoginReq) returns (LoginResp)
 }
 
 // 发送注册验证码请求
@@ -45,4 +49,18 @@ type RegisterReq {
 
 // 注册响应
 type RegisterResp {}
+
+// 登录请求
+type LoginReq {
+	Email      string `json:"email"` // 邮箱
+	Password   string `json:"password"` // 密码
+	RememberMe bool   `json:"rememberMe,optional,default=false"` // 记住我，默认 false
+}
+
+// 登录响应
+type LoginResp {
+	AccessToken  string `json:"accessToken"` // 短期令牌，单位:秒
+	RefreshToken string `json:"refreshToken"` // 长期令牌，单位:秒
+	ExpiresIn    int64  `json:"expiresIn"` // AccessToken 有效期，单位:秒
+}
 
