@@ -2,6 +2,21 @@ Name: user-api
 Host: 0.0.0.0
 Port: 8888
 
+# JWT 认证配置
+Auth:
+
+  # Access Token 签名密钥，用于签发和验证短期令牌
+  AccessSecret: "yourATsecret"
+
+  # Access Token 有效期，单位：秒
+  AccessExpire: 86400
+
+# Refresh Token 签名密钥，用于在 Access Token 过期后获取新的 Access Token
+RefreshSecret: "yourRTsecret"
+
+# Refresh Token 有效期，单位：秒
+RefreshExpire: 604800
+
 # postgreSQL数据库配置
 PostgreSQL:
 
