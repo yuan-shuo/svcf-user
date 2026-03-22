@@ -17,6 +17,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		[]rest.Route{
 			{
 				Method:  http.MethodPost,
+				Path:    "/login",
+				Handler: account_noauth.LoginHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
 				Path:    "/register",
 				Handler: account_noauth.RegisterHandler(serverCtx),
 			},
@@ -26,6 +31,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: account_noauth.SendRegisterCodeHandler(serverCtx),
 			},
 		},
-		rest.WithPrefix("/api/account/v1"),
+		rest.WithPrefix("/api/account/v1/noauth"),
 	)
 }

@@ -28,4 +28,6 @@ const (
 	CodeEmailRegistered   = 2006 // 邮箱已注册
 	CodeEmailNotVerified  = 2007 // 邮箱未验证
 
+	CodeUserNotExistOrPasswordIncorrect = 2100 // 登录时用户名不存在或密码错误
+
 )
