@@ -51,9 +51,13 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 	}
 
 	// 4. 签发 refreshToken
-	refreshToken, err := l.generateRefreshToken(user)
-	if err != nil {
-		return nil, err
+	var refreshToken string
+	if req.RememberMe {
+		// 仅在用户主动选择 "记住我" 时提供RT
+		refreshToken, err = l.generateRefreshToken(user)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// 5. 构建响应
@@ -117,9 +121,15 @@ func (l *LoginLogic) generateRefreshToken(user *model.Users) (string, error) {
 
 // 5. 响应构建模块
 func (l *LoginLogic) buildLoginResponse(accessToken, refreshToken string) *types.LoginResp {
-	return &types.LoginResp{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    l.svcCtx.Config.Auth.AccessExpire,
+	resp := &types.LoginResp{
+		AccessToken: accessToken,
+		ExpiresIn:   l.svcCtx.Config.Auth.AccessExpire,
 	}
+
+	// 只有 refreshToken 非空时才返回
+	if refreshToken != "" {
+		resp.RefreshToken = refreshToken
+	}
+
+	return resp
 }

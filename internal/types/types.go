@@ -10,9 +10,9 @@ type LoginReq struct {
 }
 
 type LoginResp struct {
-	AccessToken  string `json:"accessToken"`  // 短期令牌，单位:秒
-	RefreshToken string `json:"refreshToken"` // 长期令牌，单位:秒
-	ExpiresIn    int64  `json:"expiresIn"`    // AccessToken 有效期，单位:秒
+	AccessToken  string `json:"accessToken"`            // 短期令牌，单位:秒
+	RefreshToken string `json:"refreshToken,omitempty"` // 长期令牌，单位:秒
+	ExpiresIn    int64  `json:"expiresIn"`              // AccessToken 有效期，单位:秒
 }
 
 type RegisterReq struct {

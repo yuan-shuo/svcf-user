@@ -74,7 +74,7 @@ func isCodeErrorForLogin(err error, code int) bool {
 	return false
 }
 
-func TestLoginLogic_Login_Success(t *testing.T) {
+func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 	ctx := context.Background()
 	mockUsersModel := new(MockUsersModelForLogin)
 
@@ -107,8 +107,9 @@ func TestLoginLogic_Login_Success(t *testing.T) {
 
 	logic := NewLoginLogic(ctx, svcCtx)
 	req := &types.LoginReq{
-		Email:    email,
-		Password: password,
+		Email:      email,
+		Password:   password,
+		RememberMe: true, // 选择记住我
 	}
 
 	resp, err := logic.Login(req)
@@ -116,7 +117,54 @@ func TestLoginLogic_Login_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.NotEmpty(t, resp.AccessToken)
-	assert.NotEmpty(t, resp.RefreshToken)
+	assert.NotEmpty(t, resp.RefreshToken) // RememberMe=true 时应该有 refreshToken
+	assert.Equal(t, int64(3600), resp.ExpiresIn)
+	mockUsersModel.AssertExpectations(t)
+}
+
+func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
+	ctx := context.Background()
+	mockUsersModel := new(MockUsersModelForLogin)
+
+	// 准备测试数据
+	email := "test@example.com"
+	password := "testpassword123"
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	user := &model.Users{
+		Id:           1,
+		SnowflakeId:  12345,
+		Nickname:     "testuser",
+		Email:        email,
+		PasswordHash: string(hashedPassword),
+	}
+
+	// 设置 mock 期望
+	mockUsersModel.On("FindOneByEmail", ctx, email).Return(user, nil)
+
+	svcCtx := &svc.ServiceContext{
+		UsersModel: mockUsersModel,
+		Config: config.Config{
+			Auth: config.Auth{
+				AccessSecret: "test-access-secret",
+				AccessExpire: 3600,
+			},
+			// 不需要 RefreshSecret 和 RefreshExpire，因为不签发 RT
+		},
+	}
+
+	logic := NewLoginLogic(ctx, svcCtx)
+	req := &types.LoginReq{
+		Email:      email,
+		Password:   password,
+		RememberMe: false, // 不选择记住我
+	}
+
+	resp, err := logic.Login(req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.NotEmpty(t, resp.AccessToken)
+	assert.Empty(t, resp.RefreshToken) // RememberMe=false 时不应该有 refreshToken
 	assert.Equal(t, int64(3600), resp.ExpiresIn)
 	mockUsersModel.AssertExpectations(t)
 }
