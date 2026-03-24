@@ -81,7 +81,7 @@ func (l *LoginLogic) getUserByEmail(email string) (*model.Users, error) {
 func (l *LoginLogic) verifyPassword(hashedPassword, password, email string) error {
 	if err := utils.ComparePassword(hashedPassword, password); err != nil {
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-			return errs.New(errs.CodeInvalidPassword)
+			return errs.New(errs.CodeUserNotExistOrPasswordIncorrect)
 		}
 		logx.Errorf("用户登录密码校验失败, email=%s, err=%w", email, err)
 		return errs.New(errs.CodeInternalError)
