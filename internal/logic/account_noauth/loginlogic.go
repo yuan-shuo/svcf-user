@@ -71,7 +71,7 @@ func (l *LoginLogic) getUserByEmail(email string) (*model.Users, error) {
 		if errors.Is(err, sqlx.ErrNotFound) {
 			return nil, errs.New(errs.CodeUserNotExistOrPasswordIncorrect)
 		}
-		logx.Errorf("查询用户信息失败, email=%s, err=%w", email, err)
+		logx.Errorf("查询用户信息失败, email=%s, err=%v", email, err)
 		return nil, errs.New(errs.CodeInternalError)
 	}
 	return user, nil
@@ -83,7 +83,7 @@ func (l *LoginLogic) verifyPassword(hashedPassword, password, email string) erro
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
 			return errs.New(errs.CodeUserNotExistOrPasswordIncorrect)
 		}
-		logx.Errorf("用户登录密码校验失败, email=%s, err=%w", email, err)
+		logx.Errorf("用户登录密码校验失败, email=%s, err=%v", email, err)
 		return errs.New(errs.CodeInternalError)
 	}
 	return nil
@@ -99,7 +99,7 @@ func (l *LoginLogic) generateAccessToken(user *model.Users) (string, error) {
 		user.Email,
 	)
 	if err != nil {
-		logx.Errorf("签发 accessToken 失败, email=%s, err=%w", user.Email, err)
+		logx.Errorf("签发 accessToken 失败, email=%s, err=%v", user.Email, err)
 		return "", errs.New(errs.CodeInternalError)
 	}
 	return accessToken, nil
@@ -113,7 +113,7 @@ func (l *LoginLogic) generateRefreshToken(user *model.Users) (string, error) {
 		user.SnowflakeId,
 	)
 	if err != nil {
-		logx.Errorf("签发 refreshToken 失败, email=%s, err=%w", user.Email, err)
+		logx.Errorf("签发 refreshToken 失败, email=%s, err=%v", user.Email, err)
 		return "", errs.New(errs.CodeInternalError)
 	}
 	return refreshToken, nil
