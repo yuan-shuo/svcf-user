@@ -1,5 +1,7 @@
 package errs
 
+import "errors"
+
 // CodeError 带错误码的错误类型
 type CodeError struct {
 	Code int
@@ -43,12 +45,14 @@ func New(code int, msg ...string) *CodeError {
 }
 
 // IsCodeError 检查错误是否为 CodeError
+// 使用 errors.As 可以处理被包装的错误（如 fmt.Errorf("...: %w", err)）
 func IsCodeError(err error) (*CodeError, bool) {
 	if err == nil {
 		return nil, false
 	}
-	if e, ok := err.(*CodeError); ok {
-		return e, true
+	var codeErr *CodeError
+	if errors.As(err, &codeErr) {
+		return codeErr, true
 	}
 	return nil, false
 }

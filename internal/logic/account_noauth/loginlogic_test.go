@@ -261,7 +261,7 @@ func TestLoginLogic_Login_InvalidPassword(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeInvalidPassword))
+	assert.True(t, isCodeErrorForLogin(err, errs.CodeUserNotExistOrPasswordIncorrect))
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -361,7 +361,7 @@ func TestLoginLogic_verifyPassword_InvalidPassword(t *testing.T) {
 	err := logic.verifyPassword(string(hashedPassword), wrongPassword, "test@example.com")
 
 	assert.Error(t, err)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeInvalidPassword))
+	assert.True(t, isCodeErrorForLogin(err, errs.CodeUserNotExistOrPasswordIncorrect))
 }
 
 func TestLoginLogic_verifyPassword_HashError(t *testing.T) {

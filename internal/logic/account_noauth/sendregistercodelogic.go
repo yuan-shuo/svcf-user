@@ -19,13 +19,6 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
-const (
-	verifyKey               string = "verify" // 包级验证redis键词缀
-	limitKey                string = "limit"  // 包级限流redis键词缀
-	redisValueCodeFieldName string = "code"   // redis hash 验证码值的键名
-	redisValueUsedFieldName string = "used"   // redis hash 是否使用过值的键名 "0": 未使用过
-)
-
 type SendRegisterCodeLogic struct {
 	logx.Logger
 	ctx    context.Context
@@ -62,7 +55,7 @@ func (l *SendRegisterCodeLogic) SendRegisterCode(req *types.SendCodeReq) (resp *
 	}
 	if err != sqlx.ErrNotFound {
 		// 数据库查询出错
-		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%w", req.Email, err)
+		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", req.Email, err)
 		return nil, errs.New(errs.CodeInternalError)
 	}
 
@@ -103,7 +96,7 @@ func (l *SendRegisterCodeLogic) validateRequest(req *types.SendCodeReq) error {
 	}
 	// 验证邮箱格式
 	if _, err := mail.ParseAddress(req.Email); err != nil {
-		logx.Errorf("邮箱格式不正确, email=%s, err=%w", req.Email, err)
+		logx.Errorf("邮箱格式不正确, email=%s, err=%v", req.Email, err)
 		return errs.New(errs.CodeInvalidParam)
 	}
 	return nil
@@ -118,7 +111,7 @@ func (l *SendRegisterCodeLogic) checkRateLimit(email string) error {
 	// 这是一个原子操作，Redis保证不会被打断
 	ok, err := l.svcCtx.Redis.SetnxExCtx(l.ctx, limitKey, "1", retryAfter)
 	if err != nil {
-		logx.Errorf("限流检查失败, email=%s, err=%w", email, err)
+		logx.Errorf("限流检查失败, email=%s, err=%v", email, err)
 		return errs.New(errs.CodeInternalError)
 	}
 
@@ -152,7 +145,7 @@ func (l *SendRegisterCodeLogic) saveCodeToRedis(email, code string) error {
 		redisValue,
 		l.svcCtx.Config.Register.SendCodeConfig.ExpireIn,
 	); err != nil {
-		logx.Errorf("注册验证码缓存失败, email=%s, err=%w", email, err)
+		logx.Errorf("注册验证码缓存失败, email=%s, err=%v", email, err)
 		return errs.New(errs.CodeInternalError)
 	}
 	return nil
@@ -169,12 +162,12 @@ func (l *SendRegisterCodeLogic) sendToMQ(email, code string) error {
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		logx.Errorf("消息序列化失败, email=%s, err=%w", email, err)
+		logx.Errorf("消息序列化失败, email=%s, err=%v", email, err)
 		return errs.New(errs.CodeInternalError)
 	}
 
 	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
-		logx.Errorf("消息队列推送失败, email=%s, err=%w", email, err)
+		logx.Errorf("消息队列推送失败, email=%s, err=%v", email, err)
 		return errs.New(errs.CodeInternalError)
 	}
 	return nil
@@ -190,12 +183,12 @@ func (l *SendRegisterCodeLogic) sendReminderEmailRegisteredToMQ(email string) er
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		logx.Errorf("消息序列化失败, email=%s, err=%w", email, err)
+		logx.Errorf("消息序列化失败, email=%s, err=%v", email, err)
 		return errs.New(errs.CodeInternalError)
 	}
 
 	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
-		logx.Errorf("消息队列推送失败, email=%s, err=%w", email, err)
+		logx.Errorf("消息队列推送失败, email=%s, err=%v", email, err)
 		return errs.New(errs.CodeInternalError)
 	}
 	return nil

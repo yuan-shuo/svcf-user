@@ -44,8 +44,8 @@ func SetHashField(rc *redis.Redis, ctx context.Context, key, field, value string
 
 // HashExists 检查 Hash 是否存在
 func HashExists(rc *redis.Redis, ctx context.Context, key string) (bool, error) {
-	val, err := rc.ExistsCtx(ctx, key)
-	return val, err
+	exists, err := rc.ExistsCtx(ctx, key)
+	return exists, err
 }
 
 // GetAllHash 获取整个 Hash（调试用）
