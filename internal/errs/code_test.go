@@ -14,6 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// codeFileName 定义要解析的错误码常量文件名
+const codeFileName = "code.go"
+
 // TestCodeMapCompletenessDynamic 真正动态地检查 codeMsg 和 errorHTTPStatus 的完整性
 // 通过解析 code.go 源代码文件，获取所有以 "Code" 开头的 const 定义
 func TestCodeMapCompletenessDynamic(t *testing.T) {
@@ -52,11 +55,11 @@ func parseCodeConstants() ([]int, error) {
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
 		// 如果无法获取当前文件路径，尝试使用相对路径
-		return parseCodeFile("code.go")
+		return parseCodeFile(codeFileName)
 	}
 
 	// code.go 与当前测试文件在同一目录
-	codeFilePath := filepath.Join(filepath.Dir(currentFile), "code.go")
+	codeFilePath := filepath.Join(filepath.Dir(currentFile), codeFileName)
 	return parseCodeFile(codeFilePath)
 }
 
