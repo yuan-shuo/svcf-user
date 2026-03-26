@@ -85,29 +85,23 @@ CacheRedis:
     Type: node
     Pass: ""
 
-# 注册配置
-Register:
+# 验证码配置
+VerifyCodeConfig:
 
-  # 验证码发送配置，可以放着不管不改也不会有事，不关心可以跳过整个字段
-  SendCodeConfig:
+  # 验证码类型
+  Type:
+    Register: register # 注册验证码
+    ResetPassword: reset_password # 重置密码验证码
+    RemindRegistered: remind_registered # 提醒注册验证码
 
-    # 注册验证码类型，用于redis存储hash验证码和消息队列的类型字段
-    ReceiveType: register
+  # 验证码时间相关配置参数
+  Time:
+    ExpireIn: 300 # 验证码有效期时间，单位：秒
+    RetryAfter: 60 # 验证码请求间隔时间，单位：秒
 
-    # 注册码有效时间，超过此时间就会被redis清理，单位：s
-    ExpireIn: 300
-
-    # 注册码请求间隔时间，防止频繁请求，单位：s
-    RetryAfter: 60
-
-    # redis数据库存储注册验证码使用的键的前缀
-    RedisKeyPrefix: account
-
-    # 邮件提示验证码类型
-    ReminderType:
-      # 用于提示消息队列的对应消息应用于发送已注册邮箱邮件
-      Registered: reminder_registered
-
+  # 验证码redis数据库配置
+  Redis:
+    KeyPrefix: account # 验证码redis数据库键的前缀
 
 # --- 以下配置已废弃 ---
 
@@ -116,3 +110,27 @@ Register:
 #   Brokers:
 #     - localhost:9092
 #   Topic: my-topic
+
+# (2026-03-26 #2) 废弃原因: 为了提高验证码接口复用性，修复对于注册验证码的强行绑定问题，不再使用register配置所有验证码数据
+# # 注册配置
+# Register:
+
+#   # 验证码发送配置，可以放着不管不改也不会有事，不关心可以跳过整个字段
+#   SendCodeConfig:
+
+#     # 注册验证码类型，用于redis存储hash验证码和消息队列的类型字段
+#     ReceiveType: register
+
+#     # 注册码有效时间，超过此时间就会被redis清理，单位：s
+#     ExpireIn: 300
+
+#     # 注册码请求间隔时间，防止频繁请求，单位：s
+#     RetryAfter: 60
+
+#     # redis数据库存储注册验证码使用的键的前缀
+#     RedisKeyPrefix: account
+
+#     # 邮件提示验证码类型
+#     ReminderType:
+#       # 用于提示消息队列的对应消息应用于发送已注册邮箱邮件
+#       Registered: reminder_registered

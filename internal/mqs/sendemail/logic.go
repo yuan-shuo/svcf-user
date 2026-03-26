@@ -20,7 +20,7 @@ func (l *SendEmail) sendAlreadyRegisteredReminderEmail(msg *types.VerificationCo
 // 发送注册用验证码邮件
 func (l *SendEmail) sendVerifyCodeEmail(msg *types.VerificationCodeMessage) error {
 	// 计算分钟，至少显示1分钟
-	expireMinutes := l.svcCtx.Config.Register.SendCodeConfig.ExpireIn / 60
+	expireMinutes := l.svcCtx.Config.VerifyCodeConfig.Time.ExpireIn / 60
 	if expireMinutes < 1 {
 		expireMinutes = 1
 	}
