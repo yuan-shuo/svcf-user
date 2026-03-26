@@ -93,10 +93,12 @@ func setupTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUsersMode
 	// 创建 service context
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			Register: config.Register{
-				SendCodeConfig: config.SendCodeConfig{
-					RedisKeyPrefix: "account",
-					ReceiveType:    "register",
+			VerifyCodeConfig: config.VerifyCodeConfig{
+				Type: config.VerifyCodeType{
+					Register: "register",
+				},
+				Redis: config.VerifyCodeRedisConfig{
+					KeyPrefix: "account",
 				},
 			},
 		},
@@ -377,44 +379,20 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestRegisterLogic_buildVerifyKey(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{
-		Config: config.Config{
-			Register: config.Register{
-				SendCodeConfig: config.SendCodeConfig{
-					RedisKeyPrefix: "account",
-					ReceiveType:    "register",
-				},
-			},
-		},
-	}
-
-	logic := NewRegisterLogic(ctx, svcCtx)
+func TestBuildVerifyKey(t *testing.T) {
 	email := "test@example.com"
+	codeType := "register"
 
-	key := logic.buildVerifyKey(email)
+	key := buildVerifyKey(email, codeType)
 
 	expectedKey := "account:register:verify:" + email
 	assert.Equal(t, expectedKey, key)
 }
 
-func TestRegisterLogic_buildBaseKey(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{
-		Config: config.Config{
-			Register: config.Register{
-				SendCodeConfig: config.SendCodeConfig{
-					RedisKeyPrefix: "account",
-					ReceiveType:    "register",
-				},
-			},
-		},
-	}
+func TestBuildBaseKey(t *testing.T) {
+	codeType := "register"
 
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	key := logic.buildBaseKey()
+	key := buildBaseKey(codeType)
 
 	expectedKey := "account:register"
 	assert.Equal(t, expectedKey, key)

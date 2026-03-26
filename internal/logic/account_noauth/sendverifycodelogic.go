@@ -33,8 +33,13 @@ func NewSendVerifyCodeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Se
 	}
 }
 
-func (l *SendVerifyCodeLogic) SendVerifyCode(req *types.SendVerifyCodeReq) (resp *types.SendVerifyCodeResp, err error) {
-	// 验证请求（验证码类型及邮箱格式）
+// SendVerifyCode 发送验证码主流程
+// 1. 验证请求参数
+// 2. 检查限流
+// 3. 根据验证码类型执行特定业务逻辑
+// 4. 生成、存储验证码并发送到消息队列
+func (l *SendVerifyCodeLogic) SendVerifyCode(req *types.SendVerifyCodeReq) (*types.SendVerifyCodeResp, error) {
+	// 验证请求参数
 	if err := l.validateRequest(req); err != nil {
 		return nil, err
 	}
@@ -44,98 +49,116 @@ func (l *SendVerifyCodeLogic) SendVerifyCode(req *types.SendVerifyCodeReq) (resp
 		return nil, err
 	}
 
-	// 注册验证码特殊逻辑
-	if req.Type == l.svcCtx.Config.VerifyCodeConfig.Type.Register {
-		// 检查邮箱是否被注册过
-		_, err = l.svcCtx.UsersModel.FindOneByEmail(l.ctx, req.Email)
-		if err == nil {
-			// 邮箱已存在
-			if err = l.sendToMQ(req.Email, "", l.svcCtx.Config.VerifyCodeConfig.Type.RemindRegistered); err != nil {
-				return nil, err
-			}
-			return l.buildResponse(), nil
-		}
-		if err != sqlx.ErrNotFound {
-			// 数据库查询出错
-			logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", req.Email, err)
-			return nil, errs.New(errs.CodeInternalError)
-		}
-	} else if req.Type == l.svcCtx.Config.VerifyCodeConfig.Type.ResetPassword {
-		// 重置密码验证码特殊逻辑
-		// 检查邮箱是否被注册过
-		_, err = l.svcCtx.UsersModel.FindOneByEmail(l.ctx, req.Email)
-		if err != nil {
-			if err != sqlx.ErrNotFound {
-				// 数据库查询出错
-				logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", req.Email, err)
-				return nil, errs.New(errs.CodeInternalError)
-			}
-			return nil, errs.New(errs.CodeEmailNotRegistered)
-		}
-	} else {
-		return nil, errs.New(errs.CodeInvalidParam)
-	}
-
-	// 清理未使用的验证码
-	l.cleanupRedisData(req.Email, req.Type)
-
-	// 生成验证码
-	code := l.generateCode()
-
-	// 保存到 Redis
-	if err := l.saveCodeToRedis(req.Email, code, req.Type); err != nil {
-		// 如果保存失败，清理限流键
+	// 3. 根据验证码类型执行对应的业务检查
+	shouldContinue, err := l.checkBusinessLogic(req)
+	if err != nil {
 		l.cleanupRateLimit(req.Email, req.Type)
 		return nil, err
+	}
+	if !shouldContinue {
+		return l.buildResponse(), nil
+	}
+
+	// 清理旧验证码
+	l.cleanupVerifyCode(req.Email, req.Type)
+
+	// 生成并保存验证码
+	code := l.generateAndSaveCode(req)
+	if code == "" {
+		l.cleanupRateLimit(req.Email, req.Type)
+		return nil, errs.New(errs.CodeInternalError)
 	}
 
 	// 发送到消息队列
 	if err := l.sendToMQ(req.Email, code, req.Type); err != nil {
-		// 如果发送失败，清理 Redis 数据
-		l.cleanupRedisData(req.Email, req.Type)
-		l.cleanupRateLimit(req.Email, req.Type)
+		l.cleanupAll(req.Email, req.Type)
 		return nil, err
 	}
 
-	// 返回响应
 	return l.buildResponse(), nil
 }
 
-// 这个函数后续最好有更好的实现方法
-// 检查验证码类型是否正确
-func (l *SendVerifyCodeLogic) isVerifyCodeValid(codeType string) (bool, string) {
-	vt := l.svcCtx.Config.VerifyCodeConfig.Type
-	needType := fmt.Sprintf("%s|%s", vt.Register, vt.ResetPassword)
-	return codeType == vt.Register || codeType == vt.ResetPassword, needType
+// checkBusinessLogic 返回是否应该继续发送验证码
+func (l *SendVerifyCodeLogic) checkBusinessLogic(req *types.SendVerifyCodeReq) (shouldContinue bool, err error) {
+	switch req.Type {
+	case l.svcCtx.Config.VerifyCodeConfig.Type.Register:
+		return l.checkRegisterLogic(req.Email)
+	case l.svcCtx.Config.VerifyCodeConfig.Type.ResetPassword:
+		return l.checkResetPasswordLogic(req.Email)
+	default:
+		return false, errs.New(errs.CodeInvalidParam)
+	}
 }
 
-// 1. 请求验证模块
+// checkRegisterLogic 注册验证码业务检查
+// 返回 shouldContinue: 是否继续发送验证码
+func (l *SendVerifyCodeLogic) checkRegisterLogic(email string) (shouldContinue bool, err error) {
+	_, err = l.svcCtx.UsersModel.FindOneByEmail(l.ctx, email)
+	if err == nil {
+		// 邮箱已存在，发送提醒邮件，不发送验证码
+		if mqErr := l.sendToMQ(email, "", l.svcCtx.Config.VerifyCodeConfig.Type.RemindRegistered); mqErr != nil {
+			logx.Errorf("发送已注册提醒邮件失败, email=%s, err=%v", email, mqErr)
+			return false, errs.New(errs.CodeInternalError)
+		}
+		// 不继续发送验证码，但也不返回错误
+		return false, nil
+	}
+	if err != sqlx.ErrNotFound {
+		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", email, err)
+		return false, errs.New(errs.CodeInternalError)
+	}
+	// 邮箱未注册，继续发送验证码
+	return true, nil
+}
+
+// checkResetPasswordLogic 重置密码验证码业务检查
+// 返回 shouldContinue: 是否继续发送验证码
+func (l *SendVerifyCodeLogic) checkResetPasswordLogic(email string) (shouldContinue bool, err error) {
+	_, err = l.svcCtx.UsersModel.FindOneByEmail(l.ctx, email)
+	if err == sqlx.ErrNotFound {
+		// 邮箱不存在，返回错误，不发送验证码
+		return false, errs.New(errs.CodeEmailNotRegistered)
+	}
+	if err != nil {
+		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", email, err)
+		return false, errs.New(errs.CodeInternalError)
+	}
+	// 邮箱存在，继续发送验证码
+	return true, nil
+}
+
+// validateRequest 验证请求参数
 func (l *SendVerifyCodeLogic) validateRequest(req *types.SendVerifyCodeReq) error {
 	if req == nil {
 		return errs.New(errs.CodeInvalidParam)
 	}
-	// 检查验证码类型是否正确
-	// if req.Type != l.svcCtx.Config.Register.SendCodeConfig.ReceiveType {
-	ok, needType := l.isVerifyCodeValid(req.Type)
-	if !ok {
-		logx.Errorf("无效的验证码请求类型, type=%s, expected=%s", req.Type, needType)
+
+	if !l.isValidCodeType(req.Type) {
+		logx.Errorf("无效的验证码请求类型, type=%s", req.Type)
 		return errs.New(errs.CodeInvalidParam)
 	}
-	// 验证邮箱格式
+
 	if _, err := mail.ParseAddress(req.Email); err != nil {
 		logx.Errorf("邮箱格式不正确, email=%s, err=%v", req.Email, err)
 		return errs.New(errs.CodeInvalidParam)
 	}
+
 	return nil
 }
 
-// 2. 限流检查模块
-func (l *SendVerifyCodeLogic) checkRateLimit(email string, codeType string) error {
+// isValidCodeType 检查验证码类型是否有效
+func (l *SendVerifyCodeLogic) isValidCodeType(codeType string) bool {
+	vt := l.svcCtx.Config.VerifyCodeConfig.Type
+	return codeType == vt.Register || codeType == vt.ResetPassword
+}
+
+// checkRateLimit 检查发送频率限制
+func (l *SendVerifyCodeLogic) checkRateLimit(email, codeType string) error {
 	limitKey := buildLimitKey(email, codeType)
 	retryAfter := l.svcCtx.Config.VerifyCodeConfig.Time.RetryAfter
 
 	// SET key value NX EX seconds：只有key不存在时才设置，并设置过期时间
-	// 这是一个原子操作，Redis保证不会被打断
+	// 保证原子性
 	ok, err := l.svcCtx.Redis.SetnxExCtx(l.ctx, limitKey, "1", retryAfter)
 	if err != nil {
 		logx.Errorf("限流检查失败, email=%s, err=%v", email, err)
@@ -149,17 +172,13 @@ func (l *SendVerifyCodeLogic) checkRateLimit(email string, codeType string) erro
 		return errs.New(errs.CodeInvalidParam, fmt.Sprintf("发送过于频繁，请%d秒后重试", ttl))
 	}
 
-	return nil // 设置成功，可以发送
+	return nil
 }
 
-// 3. 验证码生成模块
-func (l *SendVerifyCodeLogic) generateCode() string {
-	return utils.GenerateMixedCode(6)
-}
-
-// 4. Redis 存储模块
-func (l *SendVerifyCodeLogic) saveCodeToRedis(email, code, codeType string) error {
-	redisKey := buildVerifyKey(email, codeType)
+// generateAndSaveCode 生成验证码并保存到Redis
+func (l *SendVerifyCodeLogic) generateAndSaveCode(req *types.SendVerifyCodeReq) string {
+	code := utils.GenerateMixedCode(6)
+	redisKey := buildVerifyKey(req.Email, req.Type)
 	redisValue := map[string]string{
 		redisValueCodeFieldName: code,
 		redisValueUsedFieldName: "0",
@@ -172,13 +191,14 @@ func (l *SendVerifyCodeLogic) saveCodeToRedis(email, code, codeType string) erro
 		redisValue,
 		l.svcCtx.Config.VerifyCodeConfig.Time.ExpireIn,
 	); err != nil {
-		logx.Errorf("注册验证码缓存失败, email=%s, err=%v", email, err)
-		return errs.New(errs.CodeInternalError)
+		logx.Errorf("验证码缓存失败, email=%s, err=%v", req.Email, err)
+		return ""
 	}
-	return nil
+
+	return code
 }
 
-// 5. MQ 消息发送模块
+// sendToMQ 发送验证码消息到队列
 func (l *SendVerifyCodeLogic) sendToMQ(email, code, codeType string) error {
 	msg := types.VerificationCodeMessage{
 		Code:      code,
@@ -193,27 +213,39 @@ func (l *SendVerifyCodeLogic) sendToMQ(email, code, codeType string) error {
 		return errs.New(errs.CodeInternalError)
 	}
 
-	if err := l.svcCtx.KqPusherClient.Push(context.Background(), string(msgBytes)); err != nil {
+	if err := l.svcCtx.KqPusherClient.Push(l.ctx, string(msgBytes)); err != nil {
 		logx.Errorf("消息队列推送失败, email=%s, err=%v", email, err)
 		return errs.New(errs.CodeInternalError)
 	}
+
 	return nil
 }
 
-// 6. 响应构建模块
+// buildResponse 构建响应
 func (l *SendVerifyCodeLogic) buildResponse() *types.SendVerifyCodeResp {
 	return &types.SendVerifyCodeResp{
 		RetryAfter: l.svcCtx.Config.VerifyCodeConfig.Time.RetryAfter,
 	}
 }
 
-// 清理函数
-func (l *SendVerifyCodeLogic) cleanupRateLimit(email string, codeType string) {
+// cleanupRateLimit 清理限流标记
+func (l *SendVerifyCodeLogic) cleanupRateLimit(email, codeType string) {
 	limitKey := buildLimitKey(email, codeType)
-	l.svcCtx.Redis.DelCtx(l.ctx, limitKey)
+	if _, err := l.svcCtx.Redis.DelCtx(l.ctx, limitKey); err != nil {
+		logx.Errorf("清理限流标记失败, email=%s, err=%v", email, err)
+	}
 }
 
-func (l *SendVerifyCodeLogic) cleanupRedisData(email string, codeType string) {
+// cleanupVerifyCode 清理验证码数据
+func (l *SendVerifyCodeLogic) cleanupVerifyCode(email, codeType string) {
 	verifyKey := buildVerifyKey(email, codeType)
-	l.svcCtx.Redis.DelCtx(l.ctx, verifyKey)
+	if _, err := l.svcCtx.Redis.DelCtx(l.ctx, verifyKey); err != nil {
+		logx.Errorf("清理验证码数据失败, email=%s, err=%v", email, err)
+	}
+}
+
+// cleanupAll 清理所有相关数据（用于失败回滚）
+func (l *SendVerifyCodeLogic) cleanupAll(email, codeType string) {
+	l.cleanupRateLimit(email, codeType)
+	l.cleanupVerifyCode(email, codeType)
 }

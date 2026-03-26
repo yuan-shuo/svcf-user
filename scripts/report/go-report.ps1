@@ -1,0 +1,1 @@
+goreportcard-cli -v -t 100
