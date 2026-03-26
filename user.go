@@ -6,7 +6,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
 
 	"user/internal/config"
 	"user/internal/errs"
@@ -33,14 +32,7 @@ func main() {
 	handler.RegisterHandlers(server, ctx)
 
 	// 自定义错误
-	httpx.SetErrorHandler(func(err error) (int, any) {
-		switch e := err.(type) {
-		case *errs.CodeError:
-			return http.StatusOK, e.Data()
-		default:
-			return http.StatusInternalServerError, nil
-		}
-	})
+	httpx.SetErrorHandler(errs.ErrsHandler)
 
 	fmt.Printf("Starting server at %s:%d...\n", c.Host, c.Port)
 	server.Start()

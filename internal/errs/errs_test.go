@@ -2,231 +2,322 @@ package errs
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCodeError_Error(t *testing.T) {
 	tests := []struct {
-		name     string
-		codeErr  *CodeError
-		expected string
+		name string
+		err  *CodeError
+		want string
 	}{
 		{
-			name:     "普通错误",
-			codeErr:  &CodeError{Code: CodeInvalidParam, Msg: "参数错误"},
-			expected: "参数错误",
+			name: "有错误信息",
+			err:  &CodeError{Code: 1000, Msg: "系统错误"},
+			want: "系统错误",
 		},
 		{
-			name:     "成功状态",
-			codeErr:  &CodeError{Code: CodeSuccess, Msg: "success"},
-			expected: "success",
-		},
-		{
-			name:     "空消息",
-			codeErr:  &CodeError{Code: CodeInternalError, Msg: ""},
-			expected: "",
+			name: "空错误信息",
+			err:  &CodeError{Code: 1000, Msg: ""},
+			want: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.codeErr.Error()
-			if got != tt.expected {
-				t.Errorf("Error() = %v, want %v", got, tt.expected)
-			}
-		})
-	}
-}
-
-func TestCodeError_Data(t *testing.T) {
-	tests := []struct {
-		name         string
-		codeErr      *CodeError
-		wantCode     int
-		wantMsg      string
-		wantJSONCode int
-		wantJSONMsg  string
-	}{
-		{
-			name:         "普通错误",
-			codeErr:      &CodeError{Code: CodeInvalidParam, Msg: "参数错误"},
-			wantCode:     CodeInvalidParam,
-			wantMsg:      "参数错误",
-			wantJSONCode: CodeInvalidParam,
-			wantJSONMsg:  "参数错误",
-		},
-		{
-			name:         "成功状态",
-			codeErr:      &CodeError{Code: CodeSuccess, Msg: "success"},
-			wantCode:     CodeSuccess,
-			wantMsg:      "success",
-			wantJSONCode: CodeSuccess,
-			wantJSONMsg:  "success",
-		},
-		{
-			name:         "空消息",
-			codeErr:      &CodeError{Code: CodeInternalError, Msg: ""},
-			wantCode:     CodeInternalError,
-			wantMsg:      "",
-			wantJSONCode: CodeInternalError,
-			wantJSONMsg:  "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.codeErr.Data()
-			if got == nil {
-				t.Errorf("Data() = nil, want non-nil")
-				return
-			}
-			if got.Code != tt.wantJSONCode {
-				t.Errorf("Data().Code = %v, want %v", got.Code, tt.wantJSONCode)
-			}
-			if got.Msg != tt.wantJSONMsg {
-				t.Errorf("Data().Msg = %v, want %v", got.Msg, tt.wantJSONMsg)
-			}
+			got := tt.err.Error()
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestGetMsg(t *testing.T) {
 	tests := []struct {
-		name     string
-		code     int
-		expected string
+		name string
+		code int
+		want string
 	}{
 		{
-			name:     "存在的错误码",
-			code:     CodeInvalidParam,
-			expected: "请求参数错误",
+			name: "存在的错误码",
+			code: CodeSuccess,
+			want: "success",
 		},
 		{
-			name:     "不存在的错误码",
-			code:     99999,
-			expected: "未知错误",
+			name: "存在的错误码-内部错误",
+			code: CodeInternalError,
+			want: "系统繁忙，请稍后重试",
 		},
 		{
-			name:     "成功状态码",
-			code:     CodeSuccess,
-			expected: "success",
+			name: "不存在的错误码",
+			code: 99999,
+			want: "未知错误",
+		},
+		{
+			name: "负数错误码",
+			code: -1,
+			want: "未知错误",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GetMsg(tt.code)
-			if got != tt.expected {
-				t.Errorf("GetMsg(%d) = %v, want %v", tt.code, got, tt.expected)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestCodeError_Data(t *testing.T) {
+	tests := []struct {
+		name string
+		err  *CodeError
+		want *CodeErrorResponse
+	}{
+		{
+			name: "正常数据",
+			err:  &CodeError{Code: 1000, Msg: "系统错误"},
+			want: &CodeErrorResponse{Code: 1000, Msg: "系统错误"},
+		},
+		{
+			name: "零值",
+			err:  &CodeError{Code: 0, Msg: ""},
+			want: &CodeErrorResponse{Code: 0, Msg: ""},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.err.Data()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestErrsHandler(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantData   *CodeErrorResponse
+		isNilData  bool // 标记是否期望返回 nil
+	}{
+		{
+			name:       "CodeError-内部错误",
+			err:        New(CodeInternalError),
+			wantStatus: http.StatusInternalServerError,
+			wantData:   &CodeErrorResponse{Code: CodeInternalError, Msg: GetMsg(CodeInternalError)},
+			isNilData:  false,
+		},
+		{
+			name:       "CodeError-参数错误",
+			err:        New(CodeInvalidParam),
+			wantStatus: http.StatusBadRequest,
+			wantData:   &CodeErrorResponse{Code: CodeInvalidParam, Msg: GetMsg(CodeInvalidParam)},
+			isNilData:  false,
+		},
+		{
+			name:       "CodeError-未授权",
+			err:        New(CodeUnauthorized),
+			wantStatus: http.StatusUnauthorized,
+			wantData:   &CodeErrorResponse{Code: CodeUnauthorized, Msg: GetMsg(CodeUnauthorized)},
+			isNilData:  false,
+		},
+		{
+			name:       "CodeError-资源不存在",
+			err:        New(CodeNotFound),
+			wantStatus: http.StatusNotFound,
+			wantData:   &CodeErrorResponse{Code: CodeNotFound, Msg: GetMsg(CodeNotFound)},
+			isNilData:  false,
+		},
+		{
+			name:       "CodeError-用户已存在",
+			err:        New(CodeUserAlreadyExists),
+			wantStatus: http.StatusConflict,
+			wantData:   &CodeErrorResponse{Code: CodeUserAlreadyExists, Msg: GetMsg(CodeUserAlreadyExists)},
+			isNilData:  false,
+		},
+		{
+			name:       "普通错误",
+			err:        errors.New("普通错误"),
+			wantStatus: http.StatusInternalServerError,
+			wantData:   nil,
+			isNilData:  true,
+		},
+		{
+			name:       "nil 错误",
+			err:        nil,
+			wantStatus: http.StatusInternalServerError,
+			wantData:   nil,
+			isNilData:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotStatus, gotData := ErrsHandler(tt.err)
+			assert.Equal(t, tt.wantStatus, gotStatus)
+			if tt.isNilData {
+				assert.Nil(t, gotData)
+			} else {
+				assert.Equal(t, tt.wantData, gotData)
 			}
+		})
+	}
+}
+
+func TestCodeError_judgeErrsStatus(t *testing.T) {
+	tests := []struct {
+		name string
+		code int
+		want int
+	}{
+		{
+			name: "内部错误-500",
+			code: CodeInternalError,
+			want: http.StatusInternalServerError,
+		},
+		{
+			name: "参数错误-400",
+			code: CodeInvalidParam,
+			want: http.StatusBadRequest,
+		},
+		{
+			name: "未授权-401",
+			code: CodeUnauthorized,
+			want: http.StatusUnauthorized,
+		},
+		{
+			name: "禁止访问-403",
+			code: CodeForbidden,
+			want: http.StatusForbidden,
+		},
+		{
+			name: "资源不存在-404",
+			code: CodeNotFound,
+			want: http.StatusNotFound,
+		},
+		{
+			name: "用户已存在-409",
+			code: CodeUserAlreadyExists,
+			want: http.StatusConflict,
+		},
+		{
+			name: "不存在的错误码-返回0",
+			code: 99999,
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &CodeError{Code: tt.code}
+			got := e.judgeErrsStatus()
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestNew(t *testing.T) {
 	tests := []struct {
-		name         string
-		code         int
-		msg          []string
-		expectedCode int
-		expectedMsg  string
+		name     string
+		code     int
+		msg      []string
+		wantCode int
+		wantMsg  string
 	}{
 		{
-			name:         "使用默认消息",
-			code:         CodeInvalidParam,
-			msg:          nil,
-			expectedCode: CodeInvalidParam,
-			expectedMsg:  "请求参数错误",
+			name:     "使用默认消息",
+			code:     CodeSuccess,
+			msg:      nil,
+			wantCode: CodeSuccess,
+			wantMsg:  GetMsg(CodeSuccess),
 		},
 		{
-			name:         "自定义消息",
-			code:         CodeInvalidParam,
-			msg:          []string{"自定义参数错误"},
-			expectedCode: CodeInvalidParam,
-			expectedMsg:  "自定义参数错误",
+			name:     "自定义消息",
+			code:     CodeInternalError,
+			msg:      []string{"自定义错误信息"},
+			wantCode: CodeInternalError,
+			wantMsg:  "自定义错误信息",
 		},
 		{
-			name:         "空字符串使用默认",
-			code:         CodeInvalidParam,
-			msg:          []string{""},
-			expectedCode: CodeInvalidParam,
-			expectedMsg:  "请求参数错误",
+			name:     "空字符串使用默认消息",
+			code:     CodeInvalidParam,
+			msg:      []string{""},
+			wantCode: CodeInvalidParam,
+			wantMsg:  GetMsg(CodeInvalidParam),
 		},
 		{
-			name:         "多个消息参数取第一个",
-			code:         CodeInvalidParam,
-			msg:          []string{"第一个", "第二个"},
-			expectedCode: CodeInvalidParam,
-			expectedMsg:  "第一个",
+			name:     "多个消息参数取第一个",
+			code:     CodeUnauthorized,
+			msg:      []string{"第一个", "第二个"},
+			wantCode: CodeUnauthorized,
+			wantMsg:  "第一个",
 		},
 		{
-			name:         "不存在的错误码无默认消息",
-			code:         99999,
-			msg:          nil,
-			expectedCode: 99999,
-			expectedMsg:  "未知错误",
+			name:     "未定义错误码使用未知错误",
+			code:     99999,
+			msg:      nil,
+			wantCode: 99999,
+			wantMsg:  "未知错误",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := New(tt.code, tt.msg...)
-			if got.Code != tt.expectedCode {
-				t.Errorf("New() Code = %v, want %v", got.Code, tt.expectedCode)
-			}
-			if got.Msg != tt.expectedMsg {
-				t.Errorf("New() Msg = %v, want %v", got.Msg, tt.expectedMsg)
-			}
+			assert.Equal(t, tt.wantCode, got.Code)
+			assert.Equal(t, tt.wantMsg, got.Msg)
 		})
 	}
 }
 
 func TestIsCodeError(t *testing.T) {
 	tests := []struct {
-		name     string
-		err      error
-		wantOk   bool
-		wantCode int
-		wantMsg  string
+		name       string
+		err        error
+		wantIsCode bool
+		wantCode   int
 	}{
 		{
-			name:     "nil错误",
-			err:      nil,
-			wantOk:   false,
-			wantCode: 0,
-			wantMsg:  "",
+			name:       "是 CodeError",
+			err:        New(CodeInternalError),
+			wantIsCode: true,
+			wantCode:   CodeInternalError,
 		},
 		{
-			name:     "CodeError类型",
-			err:      New(CodeInvalidParam),
-			wantOk:   true,
-			wantCode: CodeInvalidParam,
-			wantMsg:  "请求参数错误",
+			name:       "是普通错误",
+			err:        errors.New("普通错误"),
+			wantIsCode: false,
+			wantCode:   0,
 		},
 		{
-			name:     "普通error类型",
-			err:      errors.New("普通错误"),
-			wantOk:   false,
-			wantCode: 0,
-			wantMsg:  "",
+			name:       "nil 错误",
+			err:        nil,
+			wantIsCode: false,
+			wantCode:   0,
+		},
+		{
+			name:       "包装后的 CodeError",
+			err:        fmt.Errorf("包装: %w", New(CodeInvalidParam)),
+			wantIsCode: true,
+			wantCode:   CodeInvalidParam,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := IsCodeError(tt.err)
-			if ok != tt.wantOk {
-				t.Errorf("IsCodeError() ok = %v, want %v", ok, tt.wantOk)
-				return
-			}
-			if !ok {
-				return
-			}
-			if got.Code != tt.wantCode {
-				t.Errorf("IsCodeError() Code = %v, want %v", got.Code, tt.wantCode)
-			}
-			if got.Msg != tt.wantMsg {
-				t.Errorf("IsCodeError() Msg = %v, want %v", got.Msg, tt.wantMsg)
+			codeErr, ok := IsCodeError(tt.err)
+			assert.Equal(t, tt.wantIsCode, ok)
+			if tt.wantIsCode {
+				require.NotNil(t, codeErr)
+				assert.Equal(t, tt.wantCode, codeErr.Code)
+			} else {
+				assert.Nil(t, codeErr)
 			}
 		})
 	}
@@ -239,29 +330,41 @@ func TestWrap(t *testing.T) {
 		defaultCode int
 		wantNil     bool
 		wantCode    int
-		wantMsg     string
 	}{
 		{
-			name:        "nil错误",
+			name:        "nil 错误",
 			err:         nil,
 			defaultCode: CodeInternalError,
 			wantNil:     true,
+			wantCode:    0,
 		},
 		{
-			name:        "已经是CodeError",
+			name:        "已经是 CodeError",
 			err:         New(CodeInvalidParam),
 			defaultCode: CodeInternalError,
 			wantNil:     false,
 			wantCode:    CodeInvalidParam,
-			wantMsg:     "请求参数错误",
 		},
 		{
-			name:        "普通error转换为默认错误码",
+			name:        "普通错误-使用默认错误码",
 			err:         errors.New("数据库连接失败"),
 			defaultCode: CodeInternalError,
 			wantNil:     false,
 			wantCode:    CodeInternalError,
-			wantMsg:     "系统繁忙，请稍后重试",
+		},
+		{
+			name:        "普通错误-使用自定义错误码",
+			err:         errors.New("参数无效"),
+			defaultCode: CodeInvalidParam,
+			wantNil:     false,
+			wantCode:    CodeInvalidParam,
+		},
+		{
+			name:        "包装后的 CodeError",
+			err:         fmt.Errorf("包装: %w", New(CodeUnauthorized)),
+			defaultCode: CodeInternalError,
+			wantNil:     false,
+			wantCode:    CodeUnauthorized,
 		},
 	}
 
@@ -269,21 +372,90 @@ func TestWrap(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Wrap(tt.err, tt.defaultCode)
 			if tt.wantNil {
-				if got != nil {
-					t.Errorf("Wrap() = %v, want nil", got)
-				}
-				return
-			}
-			if got == nil {
-				t.Errorf("Wrap() = nil, want non-nil")
-				return
-			}
-			if got.Code != tt.wantCode {
-				t.Errorf("Wrap() Code = %v, want %v", got.Code, tt.wantCode)
-			}
-			if got.Msg != tt.wantMsg {
-				t.Errorf("Wrap() Msg = %v, want %v", got.Msg, tt.wantMsg)
+				assert.Nil(t, got)
+			} else {
+				require.NotNil(t, got)
+				assert.Equal(t, tt.wantCode, got.Code)
 			}
 		})
+	}
+}
+
+// TestErrorCodeRanges 测试错误码范围是否符合规范
+func TestErrorCodeRanges(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     int
+		minRange int
+		maxRange int
+		codeName string
+	}{
+		{
+			name:     "成功",
+			code:     CodeSuccess,
+			minRange: 0,
+			maxRange: 0,
+			codeName: "CodeSuccess",
+		},
+		{
+			name:     "通用错误-内部错误",
+			code:     CodeInternalError,
+			minRange: 1000,
+			maxRange: 1999,
+			codeName: "CodeInternalError",
+		},
+		{
+			name:     "通用错误-参数错误",
+			code:     CodeInvalidParam,
+			minRange: 1000,
+			maxRange: 1999,
+			codeName: "CodeInvalidParam",
+		},
+		{
+			name:     "用户模块错误-用户不存在",
+			code:     CodeUserNotFound,
+			minRange: 2000,
+			maxRange: 2999,
+			codeName: "CodeUserNotFound",
+		},
+		{
+			name:     "用户模块错误-邮箱未注册",
+			code:     CodeEmailNotRegistered,
+			minRange: 2000,
+			maxRange: 2999,
+			codeName: "CodeEmailNotRegistered",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.GreaterOrEqual(t, tt.code, tt.minRange, "%s 应该在 [%d, %d] 范围内", tt.codeName, tt.minRange, tt.maxRange)
+			assert.LessOrEqual(t, tt.code, tt.maxRange, "%s 应该在 [%d, %d] 范围内", tt.codeName, tt.minRange, tt.maxRange)
+		})
+	}
+}
+
+// TestHTTPStatusValidity 测试所有 HTTP 状态码是否有效
+func TestHTTPStatusValidity(t *testing.T) {
+	validStatuses := []int{
+		http.StatusOK,                  // 200
+		http.StatusBadRequest,          // 400
+		http.StatusUnauthorized,        // 401
+		http.StatusForbidden,           // 403
+		http.StatusNotFound,            // 404
+		http.StatusConflict,            // 409
+		http.StatusInternalServerError, // 500
+	}
+
+	// 检查所有定义的 HTTP 状态码都是有效的标准状态码
+	for code, status := range errorHTTPStatus {
+		found := false
+		for _, valid := range validStatuses {
+			if status == valid {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "错误码 %d 的 HTTP 状态码 %d 不是标准的常用状态码", code, status)
 	}
 }

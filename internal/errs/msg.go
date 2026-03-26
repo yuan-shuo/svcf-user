@@ -16,5 +16,6 @@ var codeMsg = map[int]string{
 	CodeCodeAlreadyUsed:                 "验证码已使用，请重新获取",
 	CodeEmailRegistered:                 "该邮箱已注册",
 	CodeEmailNotVerified:                "邮箱未验证",
+	CodeEmailNotRegistered:              "该邮箱未注册",
 	CodeUserNotExistOrPasswordIncorrect: "登录时用户名不存在或密码错误",
 }
