@@ -47,9 +47,10 @@ func TestSendEmail_Consume(t *testing.T) {
 			}(),
 			svcCtx: &svc.ServiceContext{
 				Config: config.Config{
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
-							ReceiveType: "register",
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Type: config.VerifyCodeType{
+							Register:         "register",
+							RemindRegistered: "remind_registered",
 						},
 					},
 					SmtpConfig: config.SmtpConfig{
@@ -84,9 +85,10 @@ func TestSendEmail_Consume(t *testing.T) {
 			val:  `{"code": "123456", "type": "register"}`,
 			svcCtx: &svc.ServiceContext{
 				Config: config.Config{
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
-							ReceiveType: "register",
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Type: config.VerifyCodeType{
+							Register:         "register",
+							RemindRegistered: "remind_registered",
 						},
 					},
 					SmtpConfig: config.SmtpConfig{
@@ -115,12 +117,10 @@ func TestSendEmail_Consume(t *testing.T) {
 			}(),
 			svcCtx: &svc.ServiceContext{
 				Config: config.Config{
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
-							ReceiveType: "register",
-							ReminderType: config.ReminderType{
-								Registered: "reminder_registered",
-							},
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Type: config.VerifyCodeType{
+							Register:         "register",
+							RemindRegistered: "remind_registered",
 						},
 					},
 				},
@@ -224,12 +224,10 @@ func TestSendEmail_Consume_ReminderRegistered(t *testing.T) {
 				Port: 0,
 				From: "",
 			},
-			Register: config.Register{
-				SendCodeConfig: config.SendCodeConfig{
-					ReceiveType: "register",
-					ReminderType: config.ReminderType{
-						Registered: "reminder_registered",
-					},
+			VerifyCodeConfig: config.VerifyCodeConfig{
+				Type: config.VerifyCodeType{
+					Register:         "register",
+					RemindRegistered: "remind_registered",
 				},
 			},
 		},
@@ -239,7 +237,7 @@ func TestSendEmail_Consume_ReminderRegistered(t *testing.T) {
 	msg := types.VerificationCodeMessage{
 		Code:      "",
 		Receiver:  "test@example.com",
-		Type:      "reminder_registered",
+		Type:      "remind_registered",
 		Timestamp: 1234567890,
 	}
 	data, _ := json.Marshal(msg)
@@ -255,12 +253,10 @@ func TestSendEmail_Consume_UnknownType(t *testing.T) {
 	ctx := context.Background()
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			Register: config.Register{
-				SendCodeConfig: config.SendCodeConfig{
-					ReceiveType: "register",
-					ReminderType: config.ReminderType{
-						Registered: "reminder_registered",
-					},
+			VerifyCodeConfig: config.VerifyCodeConfig{
+				Type: config.VerifyCodeType{
+					Register:         "register",
+					RemindRegistered: "remind_registered",
 				},
 			},
 		},

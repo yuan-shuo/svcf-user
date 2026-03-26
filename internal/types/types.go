@@ -25,18 +25,18 @@ type RegisterReq struct {
 type RegisterResp struct {
 }
 
-type SendCodeReq struct {
-	Email string `json:"email"` // 邮箱地址
-	Type  string `json:"type"`  // 验证码类型: register/reset_password/bind_email
-}
-
-type SendCodeResp struct {
-	RetryAfter int `json:"retryAfter"` // 多少秒后可重发
-}
-
 type VerificationCodeMessage struct {
 	Code      string `json:"code"`      // 验证码
 	Receiver  string `json:"receiver"`  // 接收方邮箱
 	Type      string `json:"type"`      // 验证码类型（注册/登录/重置密码）
 	Timestamp int64  `json:"timestamp"` // 时间戳，用于过期判断
+}
+
+type SendVerifyCodeReq struct {
+	Email string `json:"email"` // 邮箱地址
+	Type  string `json:"type"`  // 验证码类型: register/reset_password/bind_email
+}
+
+type SendVerifyCodeResp struct {
+	RetryAfter int `json:"retryAfter"` // 多少秒后可重发
 }

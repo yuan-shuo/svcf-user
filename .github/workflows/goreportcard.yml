@@ -1,0 +1,33 @@
+name: Go Report Card CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Install goreportcard-cli
+        run: |
+          git clone https://github.com/gojp/goreportcard.git /tmp/goreportcard
+          cd /tmp/goreportcard
+          make install
+          go install ./cmd/goreportcard-cli
+
+      - name: Run goreportcard-cli with threshold
+        run: |
+          # -threshold 100 要求总体评分 >= 100%
+          # -v 显示详细输出
+          goreportcard-cli -v -t 100

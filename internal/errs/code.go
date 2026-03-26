@@ -19,14 +19,15 @@ const (
 
 	// 用户模块错误 (2000-2999)
 
-	CodeUserNotFound      = 2000 // 用户不存在
-	CodeUserAlreadyExists = 2001 // 用户已存在
-	CodeInvalidPassword   = 2002 // 密码错误
-	CodeInvalidCode       = 2003 // 验证码错误
-	CodeCodeNotFound      = 2004 // 验证码不存在
-	CodeCodeAlreadyUsed   = 2005 // 验证码已使用
-	CodeEmailRegistered   = 2006 // 邮箱已注册
-	CodeEmailNotVerified  = 2007 // 邮箱未验证
+	CodeUserNotFound       = 2000 // 用户不存在
+	CodeUserAlreadyExists  = 2001 // 用户已存在
+	CodeInvalidPassword    = 2002 // 密码错误
+	CodeInvalidCode        = 2003 // 验证码错误
+	CodeCodeNotFound       = 2004 // 验证码不存在
+	CodeCodeAlreadyUsed    = 2005 // 验证码已使用
+	CodeEmailRegistered    = 2006 // 邮箱已注册
+	CodeEmailNotVerified   = 2007 // 邮箱未验证
+	CodeEmailNotRegistered = 2008 // 邮箱未注册
 
 	CodeUserNotExistOrPasswordIncorrect = 2100 // 登录时用户名不存在或密码错误
 

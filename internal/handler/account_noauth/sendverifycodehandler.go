@@ -12,16 +12,16 @@ import (
 	"user/internal/types"
 )
 
-func SendRegisterCodeHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func SendVerifyCodeHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.SendCodeReq
+		var req types.SendVerifyCodeReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := account_noauth.NewSendRegisterCodeLogic(r.Context(), svcCtx)
-		resp, err := l.SendRegisterCode(&req)
+		l := account_noauth.NewSendVerifyCodeLogic(r.Context(), svcCtx)
+		resp, err := l.SendVerifyCode(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {

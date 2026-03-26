@@ -7,9 +7,12 @@ syntax = "v1"
 	prefix: api/account/v1/noauth
 )
 service user-api {
-	// 发送注册验证码
-	@handler sendRegisterCode
-	post /register/code (SendCodeReq) returns (SendCodeResp)
+	// // 发送注册验证码
+	// @handler sendRegisterCode
+	// post /register/code (SendCodeReq) returns (SendCodeResp)
+	// 验证码
+	@handler sendVerifyCode
+	post /register/verifycode (sendVerifyCodeReq) returns (sendVerifyCodeResp)
 
 	// 邮箱注册
 	@handler register
@@ -20,14 +23,14 @@ service user-api {
 	post /login (LoginReq) returns (LoginResp)
 }
 
-// 发送注册验证码请求
-type SendCodeReq {
+// 发送验证码请求
+type sendVerifyCodeReq {
 	Email string `json:"email"` // 邮箱地址
 	Type  string `json:"type"` // 验证码类型: register/reset_password/bind_email
 }
 
-// 发送注册验证码响应
-type SendCodeResp {
+// 发送验证码响应
+type sendVerifyCodeResp {
 	RetryAfter int `json:"retryAfter"` // 多少秒后可重发
 }
 

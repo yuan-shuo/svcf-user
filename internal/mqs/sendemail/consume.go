@@ -27,12 +27,13 @@ func (l *SendEmail) Consume(ctx context.Context, key, val string) error {
 	if err := json.Unmarshal([]byte(val), &msg); err != nil {
 		return fmt.Errorf("消息解析失败: %w", err)
 	}
+	vt := l.svcCtx.Config.VerifyCodeConfig.Type
 	// 根据消息类型分发到不同的处理器
 	switch msg.Type {
-	case l.svcCtx.Config.Register.SendCodeConfig.ReceiveType: // "register"
+	case vt.Register: // "register"
 		return l.sendVerifyCodeEmail(&msg)
 
-	case l.svcCtx.Config.Register.SendCodeConfig.ReminderType.Registered: // "reminder_registered"
+	case vt.RemindRegistered: // "remind_registered"
 		return l.sendAlreadyRegisteredReminderEmail(&msg)
 
 	default:

@@ -6,7 +6,6 @@ package account_noauth
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 
 	"user/internal/errs"
@@ -105,7 +104,7 @@ func (l *RegisterLogic) checkIfEmailHasBeenRegistered(email string) error {
 }
 
 func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) error {
-	key := l.buildVerifyKey(email)
+	key := buildVerifyKey(email, l.svcCtx.Config.VerifyCodeConfig.Type.Register)
 
 	// 一次获取所有字段（Hgetall）
 	fields, err := l.svcCtx.Redis.HgetallCtx(l.ctx, key)
@@ -134,18 +133,8 @@ func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) err
 
 // 标记验证码为已使用
 func (l *RegisterLogic) markCodeAsUsed(email string) {
-	key := l.buildVerifyKey(email)
+	key := buildVerifyKey(email, l.svcCtx.Config.VerifyCodeConfig.Type.Register)
 	if err := l.svcCtx.Redis.HsetCtx(l.ctx, key, redisValueUsedFieldName, "1"); err != nil {
 		logx.Errorf("标记验证码已使用失败, email=%s, key=%s, err=%v", email, key, err)
 	}
-}
-
-func (l *RegisterLogic) buildBaseKey() string {
-	return fmt.Sprintf("%s:%s",
-		l.svcCtx.Config.Register.SendCodeConfig.RedisKeyPrefix,
-		l.svcCtx.Config.Register.SendCodeConfig.ReceiveType)
-}
-
-func (l *RegisterLogic) buildVerifyKey(email string) string {
-	return fmt.Sprintf("%s:%s:%s", l.buildBaseKey(), verifyKey, email)
 }

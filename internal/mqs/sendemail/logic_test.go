@@ -80,8 +80,8 @@ func TestSendEmail_sendVerifyCodeEmail(t *testing.T) {
 						Port: 0,
 						From: "",
 					},
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
 							ExpireIn: 300,
 						},
 					},
@@ -104,8 +104,8 @@ func TestSendEmail_sendVerifyCodeEmail(t *testing.T) {
 						Port: 587,
 						From: "invalid-email",
 					},
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
 							ExpireIn: 300,
 						},
 					},
@@ -128,8 +128,8 @@ func TestSendEmail_sendVerifyCodeEmail(t *testing.T) {
 						Port: 587,
 						From: "sender@example.com",
 					},
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
 							ExpireIn: 300,
 						},
 					},
@@ -152,8 +152,8 @@ func TestSendEmail_sendVerifyCodeEmail(t *testing.T) {
 						Port: 587,
 						From: "sender@example.com",
 					},
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
 							ExpireIn: 300,
 						},
 					},
@@ -176,8 +176,8 @@ func TestSendEmail_sendVerifyCodeEmail(t *testing.T) {
 						Port: 587,
 						From: "sender@example.com",
 					},
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
 							ExpireIn: 0,
 						},
 					},
@@ -200,8 +200,8 @@ func TestSendEmail_sendVerifyCodeEmail(t *testing.T) {
 						Port: 465,
 						From: "sender@example.com",
 					},
-					Register: config.Register{
-						SendCodeConfig: config.SendCodeConfig{
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
 							ExpireIn: 600,
 						},
 					},
@@ -344,7 +344,7 @@ func TestSendEmail_sendAlreadyRegisteredReminderEmail(t *testing.T) {
 			},
 			msg: &types.VerificationCodeMessage{
 				Receiver: "test@example.com",
-				Type:     "reminder_registered",
+				Type:     "remind_registered",
 			},
 			wantErr: true,
 			errMsg:  "设置发件人失败",
@@ -362,7 +362,7 @@ func TestSendEmail_sendAlreadyRegisteredReminderEmail(t *testing.T) {
 			},
 			msg: &types.VerificationCodeMessage{
 				Receiver: "test@example.com",
-				Type:     "reminder_registered",
+				Type:     "remind_registered",
 			},
 			wantErr: true,
 			errMsg:  "设置发件人失败",
@@ -380,7 +380,7 @@ func TestSendEmail_sendAlreadyRegisteredReminderEmail(t *testing.T) {
 			},
 			msg: &types.VerificationCodeMessage{
 				Receiver: "invalid-email",
-				Type:     "reminder_registered",
+				Type:     "remind_registered",
 			},
 			wantErr: true,
 			errMsg:  "设置收件人失败",
@@ -398,7 +398,7 @@ func TestSendEmail_sendAlreadyRegisteredReminderEmail(t *testing.T) {
 			},
 			msg: &types.VerificationCodeMessage{
 				Receiver: "test@example.com",
-				Type:     "reminder_registered",
+				Type:     "remind_registered",
 			},
 			wantErr: true,
 			errMsg:  "发送邮件失败",

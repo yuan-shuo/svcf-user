@@ -27,8 +27,8 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodPost,
-				Path:    "/register/code",
-				Handler: account_noauth.SendRegisterCodeHandler(serverCtx),
+				Path:    "/register/verifycode",
+				Handler: account_noauth.SendVerifyCodeHandler(serverCtx),
 			},
 		},
 		rest.WithPrefix("/api/account/v1/noauth"),
