@@ -138,13 +138,3 @@ func (l *RegisterLogic) markCodeAsUsed(email string) {
 		logx.Errorf("标记验证码已使用失败, email=%s, key=%s, err=%v", email, key, err)
 	}
 }
-
-// func (l *RegisterLogic) buildBaseKey() string {
-// 	return fmt.Sprintf("%s:%s",
-// 		l.svcCtx.Config.VerifyCodeConfig.Redis.KeyPrefix,
-// 		l.svcCtx.Config.VerifyCodeConfig.Type.Register)
-// }
-
-// func (l *RegisterLogic) buildVerifyKey(email string) string {
-// 	return fmt.Sprintf("%s:%s:%s", l.buildBaseKey(), verifyKey, email)
-// }

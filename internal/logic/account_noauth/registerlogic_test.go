@@ -379,25 +379,6 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestBuildVerifyKey(t *testing.T) {
-	email := "test@example.com"
-	codeType := "register"
-
-	key := buildVerifyKey(email, codeType)
-
-	expectedKey := "account:register:verify:" + email
-	assert.Equal(t, expectedKey, key)
-}
-
-func TestBuildBaseKey(t *testing.T) {
-	codeType := "register"
-
-	key := buildBaseKey(codeType)
-
-	expectedKey := "account:register"
-	assert.Equal(t, expectedKey, key)
-}
-
 func TestRegisterLogic_createUser(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupTest(t)
 
