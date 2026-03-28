@@ -50,6 +50,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		),
 		Redis:      db.NewRedis(c.RedisConfig),
 		UsersModel: model.NewUsersModel(db.NewPostgreSQL(c.PostgreSQL), c.CacheRedis),
-		Metrics:    metrics.NewMetricsManager(c),
+		Metrics:    metrics.NewMetricsManager(),
 	}
 }
