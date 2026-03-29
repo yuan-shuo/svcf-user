@@ -2,13 +2,13 @@ package account_noauth
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
 	"user/internal/config"
 	"user/internal/errs"
+	"user/internal/mock"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -16,71 +16,13 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	mock2 "github.com/stretchr/testify/mock"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
-// MockUsersModel 模拟 UsersModel
-type MockUsersModel struct {
-	mock.Mock
-}
-
-func (m *MockUsersModel) Insert(ctx context.Context, data *model.Users) (sql.Result, error) {
-	args := m.Called(ctx, data)
-	return args.Get(0).(sql.Result), args.Error(1)
-}
-
-func (m *MockUsersModel) FindOne(ctx context.Context, id int64) (*model.Users, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModel) FindOneByEmail(ctx context.Context, email string) (*model.Users, error) {
-	args := m.Called(ctx, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModel) FindOneBySnowflakeId(ctx context.Context, snowflakeId int64) (*model.Users, error) {
-	args := m.Called(ctx, snowflakeId)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModel) Update(ctx context.Context, data *model.Users) error {
-	args := m.Called(ctx, data)
-	return args.Error(0)
-}
-
-func (m *MockUsersModel) Delete(ctx context.Context, id int64) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-// MockSqlResult 模拟 sql.Result
-type MockSqlResult struct {
-	lastID int64
-	ra     int64
-}
-
-func (m *MockSqlResult) LastInsertId() (int64, error) {
-	return m.lastID, nil
-}
-
-func (m *MockSqlResult) RowsAffected() (int64, error) {
-	return m.ra, nil
-}
-
 // setupRegisterTest 设置注册测试环境
-func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUsersModel, *svc.ServiceContext) {
+func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.UsersModel, *svc.ServiceContext) {
 	// 创建 miniredis
 	s := miniredis.RunT(t)
 
@@ -88,7 +30,7 @@ func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockU
 	rds := redis.New(s.Addr())
 
 	// 创建 mock users model
-	mockUsersModel := new(MockUsersModel)
+	mockUsersModel := new(mock.UsersModel)
 
 	// 创建 service context
 	svcCtx := &svc.ServiceContext{
@@ -113,17 +55,6 @@ func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockU
 	return s, rds, mockUsersModel, svcCtx
 }
 
-// isCodeError 检查错误是否为指定的错误码
-func isCodeError(err error, code int) bool {
-	if err == nil {
-		return false
-	}
-	if e, ok := errs.IsCodeError(err); ok {
-		return e.Code == code
-	}
-	return false
-}
-
 func TestRegisterLogic_Register_Success(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 	defer s.Close()
@@ -145,7 +76,7 @@ func TestRegisterLogic_Register_Success(t *testing.T) {
 
 	// 设置 mock 期望
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
-	mockUsersModel.On("Insert", ctx, mock.AnythingOfType("*model.Users")).Return(&MockSqlResult{lastID: 1, ra: 1}, nil)
+	mockUsersModel.On("Insert", ctx, mock2.AnythingOfType("*model.Users")).Return(&mock.SqlResult{LastID: 1, RA: 1}, nil)
 
 	// 执行测试
 	req := &types.RegisterReq{
@@ -198,7 +129,7 @@ func TestRegisterLogic_Register_InvalidCode(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
 }
 
 func TestRegisterLogic_Register_CodeExpired(t *testing.T) {
@@ -224,7 +155,7 @@ func TestRegisterLogic_Register_CodeExpired(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
 }
 
 func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
@@ -257,7 +188,7 @@ func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
 }
 
 func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
@@ -300,7 +231,7 @@ func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeEmailRegistered), "应该是邮箱已注册错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeEmailRegistered), "应该是邮箱已注册错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -337,7 +268,7 @@ func TestRegisterLogic_Register_DatabaseError(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -360,7 +291,7 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 
 	// 设置 mock 期望
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
-	mockUsersModel.On("Insert", ctx, mock.AnythingOfType("*model.Users")).Return(&MockSqlResult{}, errors.New("insert failed"))
+	mockUsersModel.On("Insert", ctx, mock2.AnythingOfType("*model.Users")).Return(&mock.SqlResult{}, errors.New("insert failed"))
 
 	// 执行测试
 	req := &types.RegisterReq{
@@ -375,7 +306,7 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -390,13 +321,13 @@ func TestRegisterLogic_createUser_Success(t *testing.T) {
 	passwd := "hashedpassword"
 
 	// 设置 mock 期望
-	mockUsersModel.On("Insert", ctx, mock.MatchedBy(func(u *model.Users) bool {
+	mockUsersModel.On("Insert", ctx, mock2.MatchedBy(func(u *model.Users) bool {
 		return u.Nickname == nickname &&
 			u.Email == email &&
 			u.PasswordHash == passwd &&
 			u.SnowflakeId > 0 &&
 			!u.DeletedAt.Valid
-	})).Return(&MockSqlResult{lastID: 1, ra: 1}, nil)
+	})).Return(&mock.SqlResult{LastID: 1, RA: 1}, nil)
 
 	err := logic.createUser(nickname, email, passwd)
 
@@ -415,12 +346,12 @@ func TestRegisterLogic_createUser_InsertFailed(t *testing.T) {
 	passwd := "hashedpassword"
 
 	// 设置 mock 期望 - 插入失败
-	mockUsersModel.On("Insert", ctx, mock.AnythingOfType("*model.Users")).Return(&MockSqlResult{}, errors.New("insert failed"))
+	mockUsersModel.On("Insert", ctx, mock2.AnythingOfType("*model.Users")).Return(&mock.SqlResult{}, errors.New("insert failed"))
 
 	err := logic.createUser(nickname, email, passwd)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -461,7 +392,7 @@ func TestRegisterLogic_checkIfEmailHasBeenRegistered_Found(t *testing.T) {
 	err := logic.checkIfEmailHasBeenRegistered(email)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeEmailRegistered), "应该是邮箱已注册错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeEmailRegistered), "应该是邮箱已注册错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -479,6 +410,6 @@ func TestRegisterLogic_checkIfEmailHasBeenRegistered_DatabaseError(t *testing.T)
 	err := logic.checkIfEmailHasBeenRegistered(email)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }

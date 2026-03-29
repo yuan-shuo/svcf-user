@@ -2,19 +2,20 @@ package accutil
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
+
 	"user/internal/config"
 	"user/internal/errs"
+	"user/internal/mock"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/utils"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	mock2 "github.com/stretchr/testify/mock"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
@@ -183,17 +184,17 @@ func TestKeyConsistency(t *testing.T) {
 
 		// 验证基础key被正确使用
 		baseKey := buildBaseKey(codeType)
-		VerifyKey := BuildVerifyKey(email, codeType)
-		LimitKey := BuildLimitKey(email, codeType)
+		verifyKey := BuildVerifyKey(email, codeType)
+		limitKey := BuildLimitKey(email, codeType)
 
 		// VerifyKey 应该以 baseKey 开头
-		assert.Contains(t, VerifyKey, baseKey)
+		assert.Contains(t, verifyKey, baseKey)
 		// LimitKey 应该以 baseKey 开头
-		assert.Contains(t, LimitKey, baseKey)
+		assert.Contains(t, limitKey, baseKey)
 
 		// 验证结构一致性
-		assert.Equal(t, baseKey+":"+VerifyKeyConst+":"+email, VerifyKey)
-		assert.Equal(t, baseKey+":"+LimitKeyConst+":"+email, LimitKey)
+		assert.Equal(t, baseKey+":"+VerifyKeyConst+":"+email, verifyKey)
+		assert.Equal(t, baseKey+":"+LimitKeyConst+":"+email, limitKey)
 	})
 }
 
@@ -203,13 +204,8 @@ const (
 	LimitKeyConst  = "limit"
 )
 
-// MockUsersModel 模拟 UsersModel
-type MockUsersModel struct {
-	mock.Mock
-}
-
 // setupCommonTest 设置通用测试环境
-func setupCommonTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUsersModel, *svc.ServiceContext) {
+func setupCommonTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.UsersModel, *svc.ServiceContext) {
 	// 创建 miniredis
 	s := miniredis.RunT(t)
 
@@ -217,7 +213,7 @@ func setupCommonTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUse
 	rds := redis.New(s.Addr())
 
 	// 创建 mock users model
-	mockUsersModel := new(MockUsersModel)
+	mockUsersModel := new(mock.UsersModel)
 
 	// 创建 service context
 	svcCtx := &svc.ServiceContext{
@@ -241,45 +237,6 @@ func setupCommonTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUse
 	assert.NoError(t, err)
 
 	return s, rds, mockUsersModel, svcCtx
-}
-
-func (m *MockUsersModel) Insert(ctx context.Context, data *model.Users) (sql.Result, error) {
-	args := m.Called(ctx, data)
-	return args.Get(0).(sql.Result), args.Error(1)
-}
-
-func (m *MockUsersModel) FindOne(ctx context.Context, id int64) (*model.Users, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModel) FindOneByEmail(ctx context.Context, email string) (*model.Users, error) {
-	args := m.Called(ctx, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModel) FindOneBySnowflakeId(ctx context.Context, snowflakeId int64) (*model.Users, error) {
-	args := m.Called(ctx, snowflakeId)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModel) Update(ctx context.Context, data *model.Users) error {
-	args := m.Called(ctx, data)
-	return args.Error(0)
-}
-
-func (m *MockUsersModel) Delete(ctx context.Context, id int64) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
 }
 
 func TestVerifyEmailAndCodeInRedis_Success(t *testing.T) {
@@ -320,7 +277,7 @@ func TestVerifyEmailAndCodeInRedis_InvalidCode(t *testing.T) {
 	err := VerifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
 }
 
 func TestVerifyEmailAndCodeInRedis_CodeNotFound(t *testing.T) {
@@ -337,18 +294,7 @@ func TestVerifyEmailAndCodeInRedis_CodeNotFound(t *testing.T) {
 	err := VerifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
-}
-
-// isCodeError 检查错误是否为指定的错误码
-func isCodeError(err error, code int) bool {
-	if err == nil {
-		return false
-	}
-	if e, ok := errs.IsCodeError(err); ok {
-		return e.Code == code
-	}
-	return false
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
 }
 
 func TestVerifyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
@@ -369,7 +315,7 @@ func TestVerifyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
 	err := VerifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
 }
 
 func TestMarkCodeAsUsed_Success(t *testing.T) {
@@ -446,7 +392,7 @@ func TestResetUserPassword_Success(t *testing.T) {
 		PasswordHash: "oldhashedpassword",
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock.MatchedBy(func(u *model.Users) bool {
+	mockUsersModel.On("Update", ctx, mock2.MatchedBy(func(u *model.Users) bool {
 		return u.PasswordHash == newPassword
 	})).Return(nil)
 
@@ -469,7 +415,7 @@ func TestResetUserPassword_UserNotFound(t *testing.T) {
 	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -486,7 +432,7 @@ func TestResetUserPassword_FindUserError(t *testing.T) {
 	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -506,12 +452,12 @@ func TestResetUserPassword_UpdateFailed(t *testing.T) {
 		PasswordHash: "oldhashedpassword",
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock.AnythingOfType("*model.Users")).Return(errors.New("update failed"))
+	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(errors.New("update failed"))
 
 	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -536,6 +482,6 @@ func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
 	err := ResetUserPassword(ctx, svcCtx, email, oldPassword)
 
 	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
 	mockUsersModel.AssertExpectations(t)
 }

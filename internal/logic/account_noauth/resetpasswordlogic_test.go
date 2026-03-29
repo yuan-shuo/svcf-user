@@ -8,6 +8,7 @@ import (
 
 	"user/internal/config"
 	"user/internal/errs"
+	"user/internal/mock"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -15,13 +16,13 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	mock2 "github.com/stretchr/testify/mock"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 // setupResetPasswordTest 设置重置密码测试环境
-func setupResetPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUsersModel, *svc.ServiceContext) {
+func setupResetPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.UsersModel, *svc.ServiceContext) {
 	// 创建 miniredis
 	s := miniredis.RunT(t)
 
@@ -29,7 +30,7 @@ func setupResetPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *
 	rds := redis.New(s.Addr())
 
 	// 创建 mock users model
-	mockUsersModel := new(MockUsersModel)
+	mockUsersModel := new(mock.UsersModel)
 
 	// 创建 service context
 	svcCtx := &svc.ServiceContext{
@@ -81,7 +82,7 @@ func TestResetPasswordLogic_ResetPassword_Success(t *testing.T) {
 		PasswordHash: "oldhashedpassword",
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock.AnythingOfType("*model.Users")).Return(nil)
+	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(nil)
 
 	// 执行测试
 	req := &types.ResetPasswordReq{
@@ -131,7 +132,7 @@ func TestResetPasswordLogic_ResetPassword_InvalidCode(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
 }
 
 func TestResetPasswordLogic_ResetPassword_CodeExpired(t *testing.T) {
@@ -156,7 +157,7 @@ func TestResetPasswordLogic_ResetPassword_CodeExpired(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
 }
 
 func TestResetPasswordLogic_ResetPassword_CodeAlreadyUsed(t *testing.T) {
@@ -188,7 +189,7 @@ func TestResetPasswordLogic_ResetPassword_CodeAlreadyUsed(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
 }
 
 func TestResetPasswordLogic_ResetPassword_UserNotFound(t *testing.T) {
@@ -223,7 +224,7 @@ func TestResetPasswordLogic_ResetPassword_UserNotFound(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -259,7 +260,7 @@ func TestResetPasswordLogic_ResetPassword_FindUserError(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -290,7 +291,7 @@ func TestResetPasswordLogic_ResetPassword_UpdateFailed(t *testing.T) {
 		PasswordHash: "oldhashedpassword",
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock.AnythingOfType("*model.Users")).Return(errors.New("update failed"))
+	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(errors.New("update failed"))
 
 	// 执行测试
 	req := &types.ResetPasswordReq{
@@ -304,6 +305,6 @@ func TestResetPasswordLogic_ResetPassword_UpdateFailed(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
