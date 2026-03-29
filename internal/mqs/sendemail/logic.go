@@ -7,6 +7,16 @@ import (
 	"github.com/wneessen/go-mail"
 )
 
+// 发送修改密码用验证码邮件
+func (l *SendEmail) sendChangePasswordEmail(msg *types.VerificationCodeMessage) error {
+	return l.sendPlainTextMail(
+		l.svcCtx.Config.SmtpConfig.From,
+		msg.Receiver,
+		"您的修改密码验证码",
+		fmt.Sprintf("[修改密码] 您的验证码是: %s, %d分钟内有效", msg.Code, l.getExpireMinutes()),
+	)
+}
+
 // 发送已注册提醒邮件
 func (l *SendEmail) sendAlreadyRegisteredReminderEmail(msg *types.VerificationCodeMessage) error {
 	return l.sendPlainTextMail(
@@ -17,35 +27,32 @@ func (l *SendEmail) sendAlreadyRegisteredReminderEmail(msg *types.VerificationCo
 	)
 }
 
-// 发送注册用验证码邮件
-func (l *SendEmail) sendVerifyCodeEmail(msg *types.VerificationCodeMessage) error {
-	// 计算分钟，至少显示1分钟
+// 计算分钟，至少显示1分钟
+func (l *SendEmail) getExpireMinutes() int {
 	expireMinutes := l.svcCtx.Config.VerifyCodeConfig.Time.ExpireIn / 60
 	if expireMinutes < 1 {
 		expireMinutes = 1
 	}
+	return expireMinutes
+}
 
+// 发送注册用验证码邮件
+func (l *SendEmail) sendVerifyCodeEmail(msg *types.VerificationCodeMessage) error {
 	return l.sendPlainTextMail(
 		l.svcCtx.Config.SmtpConfig.From,
 		msg.Receiver,
 		"您的注册验证码",
-		fmt.Sprintf("[注册] 您的验证码是: %s, %d分钟内有效", msg.Code, expireMinutes),
+		fmt.Sprintf("[注册] 您的验证码是: %s, %d分钟内有效", msg.Code, l.getExpireMinutes()),
 	)
 }
 
 // 发送重置密码用验证码邮件
 func (l *SendEmail) sendResetPasswordEmail(msg *types.VerificationCodeMessage) error {
-	// 计算分钟，至少显示1分钟
-	expireMinutes := l.svcCtx.Config.VerifyCodeConfig.Time.ExpireIn / 60
-	if expireMinutes < 1 {
-		expireMinutes = 1
-	}
-
 	return l.sendPlainTextMail(
 		l.svcCtx.Config.SmtpConfig.From,
 		msg.Receiver,
 		"您的重置密码验证码",
-		fmt.Sprintf("[重置密码] 您的验证码是: %s, %d分钟内有效", msg.Code, expireMinutes),
+		fmt.Sprintf("[重置密码] 您的验证码是: %s, %d分钟内有效", msg.Code, l.getExpireMinutes()),
 	)
 }
 
