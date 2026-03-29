@@ -3,6 +3,18 @@ syntax = "v1"
 // goctl api go --api user.api --dir .
 // goctl api validate --api user.api
 @server (
+	group:  account
+	prefix: api/account/v1
+	jwt:    Auth
+)
+service user-api {
+	// 修改密码
+	@handler changePassword
+	post /changepassword (ChangePasswordReq) returns (ChangePasswordResp)
+}
+
+// 无认证服务接口
+@server (
 	group:  account_noauth
 	prefix: api/account/v1/noauth
 )
@@ -77,4 +89,14 @@ type ResetPasswordReq {
 
 // 重置密码响应
 type ResetPasswordResp {}
+
+// 修改密码请求
+type ChangePasswordReq {
+	OldPassword string `json:"oldPassword"` // 旧密码
+	NewPassword string `json:"newPassword"` // 新密码
+	Code        string `json:"code"` // 验证码
+}
+
+// 修改密码响应
+type ChangePasswordResp {}
 

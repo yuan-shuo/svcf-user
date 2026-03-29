@@ -6,6 +6,7 @@ package handler
 import (
 	"net/http"
 
+	account "user/internal/handler/account"
 	account_noauth "user/internal/handler/account_noauth"
 	"user/internal/svc"
 
@@ -13,6 +14,18 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodPost,
+				Path:    "/changepassword",
+				Handler: account.ChangePasswordHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api/account/v1"),
+	)
+
 	server.AddRoutes(
 		[]rest.Route{
 			{
