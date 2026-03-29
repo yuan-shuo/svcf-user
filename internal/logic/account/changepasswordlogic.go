@@ -9,7 +9,6 @@ import (
 	"user/internal/logic/accutil"
 	"user/internal/svc"
 	"user/internal/types"
-	"user/internal/utils"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -33,7 +32,10 @@ func (l *ChangePasswordLogic) ChangePassword(req *types.ChangePasswordReq) (resp
 	// 所需验证码类型 - 修改密码
 	codeType := l.svcCtx.Config.VerifyCodeConfig.Type.ChangePassword
 
-	email := utils.GetEmailByJwt(l.ctx)
+	email, err := accutil.GetEmailByJwtCtx(l.ctx)
+	if err != nil {
+		return nil, err
+	}
 	// 校验验证码是否属于用户对应邮箱且正确
 	if err := accutil.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, email, req.Code, codeType); err != nil {
 		return nil, err

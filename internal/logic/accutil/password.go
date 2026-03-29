@@ -73,7 +73,11 @@ func GetUserByUid(ctx context.Context, svcCtx *svc.ServiceContext, uid int64) (*
 
 // GetUserByJwtCtx 获取用户实例
 func GetUserByJwtCtx(ctx context.Context, svcCtx *svc.ServiceContext) (*model.Users, error) {
-	uid := utils.GetUidByJwt(ctx)
+	uid, err := utils.GetUidByJwt(ctx)
+	if err != nil {
+		logx.Errorf("从JWT中提取用户ID失败, err=%v", err)
+		return nil, errs.New(errs.CodeInternalError)
+	}
 	return GetUserByUid(ctx, svcCtx, uid)
 }
 

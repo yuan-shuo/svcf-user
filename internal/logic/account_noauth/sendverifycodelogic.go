@@ -84,7 +84,7 @@ func (l *SendVerifyCodeLogic) checkBusinessLogic(req *types.SendVerifyCodeReq) (
 	switch req.Type {
 	case l.svcCtx.Config.VerifyCodeConfig.Type.Register:
 		return l.checkRegisterLogic(req.Email)
-	case l.svcCtx.Config.VerifyCodeConfig.Type.ResetPassword:
+	case l.svcCtx.Config.VerifyCodeConfig.Type.ResetPassword, l.svcCtx.Config.VerifyCodeConfig.Type.ChangePassword:
 		return l.checkResetPasswordLogic(req.Email)
 	default:
 		return false, errs.New(errs.CodeInvalidParam)
@@ -150,7 +150,7 @@ func (l *SendVerifyCodeLogic) validateRequest(req *types.SendVerifyCodeReq) erro
 // isValidCodeType 检查验证码类型是否有效
 func (l *SendVerifyCodeLogic) isValidCodeType(codeType string) bool {
 	vt := l.svcCtx.Config.VerifyCodeConfig.Type
-	return codeType == vt.Register || codeType == vt.ResetPassword
+	return codeType == vt.Register || codeType == vt.ResetPassword || codeType == vt.ChangePassword
 }
 
 // checkRateLimit 检查发送频率限制
