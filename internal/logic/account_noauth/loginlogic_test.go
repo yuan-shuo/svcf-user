@@ -2,81 +2,25 @@ package account_noauth
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 
 	"user/internal/config"
 	"user/internal/errs"
+	"user/internal/mock"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// MockUsersModelForLogin 模拟 UsersModel
-type MockUsersModelForLogin struct {
-	mock.Mock
-}
-
-func (m *MockUsersModelForLogin) Insert(ctx context.Context, data *model.Users) (sql.Result, error) {
-	args := m.Called(ctx, data)
-	return args.Get(0).(sql.Result), args.Error(1)
-}
-
-func (m *MockUsersModelForLogin) FindOne(ctx context.Context, id int64) (*model.Users, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModelForLogin) FindOneByEmail(ctx context.Context, email string) (*model.Users, error) {
-	args := m.Called(ctx, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModelForLogin) FindOneBySnowflakeId(ctx context.Context, snowflakeId int64) (*model.Users, error) {
-	args := m.Called(ctx, snowflakeId)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Users), args.Error(1)
-}
-
-func (m *MockUsersModelForLogin) Update(ctx context.Context, data *model.Users) error {
-	args := m.Called(ctx, data)
-	return args.Error(0)
-}
-
-func (m *MockUsersModelForLogin) Delete(ctx context.Context, id int64) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-// 判断是否为 CodeError
-func isCodeErrorForLogin(err error, code int) bool {
-	if err == nil {
-		return false
-	}
-	if ce, ok := err.(*errs.CodeError); ok {
-		return ce.Code == code
-	}
-	return false
-}
-
 func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 	ctx := context.Background()
-	mockUsersModel := new(MockUsersModelForLogin)
+	mockUsersModel := new(mock.UsersModel)
 
 	// 准备测试数据
 	email := "test@example.com"
@@ -124,7 +68,7 @@ func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 
 func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 	ctx := context.Background()
-	mockUsersModel := new(MockUsersModelForLogin)
+	mockUsersModel := new(mock.UsersModel)
 
 	// 准备测试数据
 	email := "test@example.com"
@@ -171,7 +115,7 @@ func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 
 func TestLoginLogic_Login_UserNotFound(t *testing.T) {
 	ctx := context.Background()
-	mockUsersModel := new(MockUsersModelForLogin)
+	mockUsersModel := new(mock.UsersModel)
 
 	email := "notfound@example.com"
 	password := "testpassword123"
@@ -193,13 +137,13 @@ func TestLoginLogic_Login_UserNotFound(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeUserNotExistOrPasswordIncorrect))
+	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotExistOrPasswordIncorrect))
 	mockUsersModel.AssertExpectations(t)
 }
 
 func TestLoginLogic_Login_DatabaseError(t *testing.T) {
 	ctx := context.Background()
-	mockUsersModel := new(MockUsersModelForLogin)
+	mockUsersModel := new(mock.UsersModel)
 
 	email := "test@example.com"
 	password := "testpassword123"
@@ -224,13 +168,13 @@ func TestLoginLogic_Login_DatabaseError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeInternalError))
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError))
 	mockUsersModel.AssertExpectations(t)
 }
 
 func TestLoginLogic_Login_InvalidPassword(t *testing.T) {
 	ctx := context.Background()
-	mockUsersModel := new(MockUsersModelForLogin)
+	mockUsersModel := new(mock.UsersModel)
 
 	email := "test@example.com"
 	correctPassword := "correctpassword"
@@ -261,13 +205,13 @@ func TestLoginLogic_Login_InvalidPassword(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeUserNotExistOrPasswordIncorrect))
+	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotExistOrPasswordIncorrect))
 	mockUsersModel.AssertExpectations(t)
 }
 
 func TestLoginLogic_getUserByEmail_Success(t *testing.T) {
 	ctx := context.Background()
-	mockUsersModel := new(MockUsersModelForLogin)
+	mockUsersModel := new(mock.UsersModel)
 
 	email := "test@example.com"
 	user := &model.Users{
@@ -294,7 +238,7 @@ func TestLoginLogic_getUserByEmail_Success(t *testing.T) {
 
 func TestLoginLogic_getUserByEmail_NotFound(t *testing.T) {
 	ctx := context.Background()
-	mockUsersModel := new(MockUsersModelForLogin)
+	mockUsersModel := new(mock.UsersModel)
 
 	email := "notfound@example.com"
 
@@ -309,13 +253,13 @@ func TestLoginLogic_getUserByEmail_NotFound(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeUserNotExistOrPasswordIncorrect))
+	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotExistOrPasswordIncorrect))
 	mockUsersModel.AssertExpectations(t)
 }
 
 func TestLoginLogic_getUserByEmail_DatabaseError(t *testing.T) {
 	ctx := context.Background()
-	mockUsersModel := new(MockUsersModelForLogin)
+	mockUsersModel := new(mock.UsersModel)
 
 	email := "test@example.com"
 
@@ -332,50 +276,8 @@ func TestLoginLogic_getUserByEmail_DatabaseError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeInternalError))
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError))
 	mockUsersModel.AssertExpectations(t)
-}
-
-func TestLoginLogic_verifyPassword_Success(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{}
-	logic := NewLoginLogic(ctx, svcCtx)
-
-	password := "testpassword123"
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
-	err := logic.verifyPassword(string(hashedPassword), password, "test@example.com")
-
-	assert.NoError(t, err)
-}
-
-func TestLoginLogic_verifyPassword_InvalidPassword(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{}
-	logic := NewLoginLogic(ctx, svcCtx)
-
-	correctPassword := "correctpassword"
-	wrongPassword := "wrongpassword"
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(correctPassword), bcrypt.DefaultCost)
-
-	err := logic.verifyPassword(string(hashedPassword), wrongPassword, "test@example.com")
-
-	assert.Error(t, err)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeUserNotExistOrPasswordIncorrect))
-}
-
-func TestLoginLogic_verifyPassword_HashError(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{}
-	logic := NewLoginLogic(ctx, svcCtx)
-
-	logx.Disable()
-
-	// 使用无效的哈希
-	err := logic.verifyPassword("invalidhash", "password", "test@example.com")
-
-	assert.Error(t, err)
-	assert.True(t, isCodeErrorForLogin(err, errs.CodeInternalError))
 }
 
 func TestLoginLogic_generateAccessToken_Success(t *testing.T) {

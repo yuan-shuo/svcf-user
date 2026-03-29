@@ -3,6 +3,15 @@
 
 package types
 
+type ChangePasswordReq struct {
+	OldPassword string `json:"oldPassword"` // 旧密码
+	NewPassword string `json:"newPassword"` // 新密码
+	Code        string `json:"code"`        // 验证码
+}
+
+type ChangePasswordResp struct {
+}
+
 type LoginReq struct {
 	Email      string `json:"email"`                             // 邮箱
 	Password   string `json:"password"`                          // 密码

@@ -39,6 +39,9 @@ func (l *SendEmail) Consume(ctx context.Context, key, val string) error {
 	case vt.ResetPassword: // "reset_password"
 		return l.sendResetPasswordEmail(&msg)
 
+	case vt.ChangePassword: // "change_password"
+		return l.sendChangePasswordEmail(&msg)
+
 	default:
 		logx.Errorf("未知的消息类型: %s", msg.Type)
 		return nil // 不返回错误，避免阻塞队列

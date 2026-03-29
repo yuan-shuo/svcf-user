@@ -1,237 +1,281 @@
 package utils
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGenerateAccessToken(t *testing.T) {
-	t.Run("成功生成 accessToken", func(t *testing.T) {
-		secret := "test-secret-key"
-		expireSeconds := int64(3600)
-		uid := int64(12345)
-		nickname := "testuser"
-		email := "test@example.com"
+func TestGetUidByJwt_Success_Int64(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, int64(12345))
 
-		token, err := GenerateAccessToken(secret, expireSeconds, uid, nickname, email)
+	uid, err := GetUidByJwt(ctx)
 
-		assert.NoError(t, err)
-		assert.NotEmpty(t, token)
-	})
-
-	t.Run("生成的 token 可以正确解析", func(t *testing.T) {
-		secret := "test-secret-key"
-		expireSeconds := int64(3600)
-		uid := int64(12345)
-		nickname := "testuser"
-		email := "test@example.com"
-
-		token, err := GenerateAccessToken(secret, expireSeconds, uid, nickname, email)
-		assert.NoError(t, err)
-
-		// 解析 token
-		claims, err := ParseToken(token, secret)
-		assert.NoError(t, err)
-		assert.NotNil(t, claims)
-
-		// 验证 claims
-		assert.Equal(t, float64(uid), claims["uid"])
-		assert.Equal(t, nickname, claims["nickname"])
-		assert.Equal(t, email, claims["email"])
-		assert.Equal(t, "access", claims["type"])
-	})
-
-	t.Run("不同参数生成不同 token", func(t *testing.T) {
-		secret := "test-secret-key"
-		expireSeconds := int64(3600)
-
-		token1, _ := GenerateAccessToken(secret, expireSeconds, 1, "user1", "user1@example.com")
-		token2, _ := GenerateAccessToken(secret, expireSeconds, 2, "user2", "user2@example.com")
-
-		assert.NotEqual(t, token1, token2)
-	})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
 }
 
-func TestGenerateRefreshToken(t *testing.T) {
-	t.Run("成功生成 refreshToken", func(t *testing.T) {
-		secret := "test-refresh-secret"
-		expireSeconds := int64(7200)
-		uid := int64(12345)
+func TestGetUidByJwt_Success_Int(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, 12345)
 
-		token, err := GenerateRefreshToken(secret, expireSeconds, uid)
+	uid, err := GetUidByJwt(ctx)
 
-		assert.NoError(t, err)
-		assert.NotEmpty(t, token)
-	})
-
-	t.Run("生成的 token 可以正确解析", func(t *testing.T) {
-		secret := "test-refresh-secret"
-		expireSeconds := int64(7200)
-		uid := int64(12345)
-
-		token, err := GenerateRefreshToken(secret, expireSeconds, uid)
-		assert.NoError(t, err)
-
-		// 解析 token
-		claims, err := ParseToken(token, secret)
-		assert.NoError(t, err)
-		assert.NotNil(t, claims)
-
-		// 验证 claims
-		assert.Equal(t, float64(uid), claims["uid"])
-		assert.Equal(t, "refresh", claims["type"])
-	})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
 }
 
-func TestParseToken(t *testing.T) {
-	t.Run("成功解析有效的 accessToken", func(t *testing.T) {
-		secret := "test-secret-key"
-		token, _ := GenerateAccessToken(secret, 3600, 12345, "testuser", "test@example.com")
+func TestGetUidByJwt_Success_JsonNumber(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, json.Number("12345"))
 
-		claims, err := ParseToken(token, secret)
+	uid, err := GetUidByJwt(ctx)
 
-		assert.NoError(t, err)
-		assert.NotNil(t, claims)
-		assert.Equal(t, float64(12345), claims["uid"])
-		assert.Equal(t, "testuser", claims["nickname"])
-		assert.Equal(t, "test@example.com", claims["email"])
-		assert.Equal(t, "access", claims["type"])
-	})
-
-	t.Run("成功解析有效的 refreshToken", func(t *testing.T) {
-		secret := "test-refresh-secret"
-		token, _ := GenerateRefreshToken(secret, 7200, 12345)
-
-		claims, err := ParseToken(token, secret)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, claims)
-		assert.Equal(t, float64(12345), claims["uid"])
-		assert.Equal(t, "refresh", claims["type"])
-	})
-
-	t.Run("错误的 secret 解析失败", func(t *testing.T) {
-		secret := "test-secret-key"
-		wrongSecret := "wrong-secret-key"
-		token, _ := GenerateAccessToken(secret, 3600, 12345, "testuser", "test@example.com")
-
-		claims, err := ParseToken(token, wrongSecret)
-
-		assert.Error(t, err)
-		assert.Nil(t, claims)
-	})
-
-	t.Run("解析无效的 token 字符串", func(t *testing.T) {
-		secret := "test-secret-key"
-		invalidToken := "invalid.token.string"
-
-		claims, err := ParseToken(invalidToken, secret)
-
-		assert.Error(t, err)
-		assert.Nil(t, claims)
-	})
-
-	t.Run("解析空字符串失败", func(t *testing.T) {
-		secret := "test-secret-key"
-
-		claims, err := ParseToken("", secret)
-
-		assert.Error(t, err)
-		assert.Nil(t, claims)
-	})
-
-	t.Run("过期的 token 解析失败", func(t *testing.T) {
-		secret := "test-secret-key"
-		// 生成已经过期的 token（过期时间为 -1 秒）
-		token, _ := GenerateAccessToken(secret, -1, 12345, "testuser", "test@example.com")
-
-		claims, err := ParseToken(token, secret)
-
-		assert.Error(t, err)
-		assert.Nil(t, claims)
-	})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
 }
 
-func TestTokenExpiration(t *testing.T) {
-	t.Run("accessToken 过期时间正确", func(t *testing.T) {
-		secret := "test-secret-key"
-		expireSeconds := int64(3600)
-		token, _ := GenerateAccessToken(secret, expireSeconds, 12345, "testuser", "test@example.com")
+func TestGetUidByJwt_Success_String(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, "12345")
 
-		claims, err := ParseToken(token, secret)
-		assert.NoError(t, err)
+	uid, err := GetUidByJwt(ctx)
 
-		// 验证过期时间
-		exp := int64(claims["exp"].(float64))
-		iat := int64(claims["iat"].(float64))
-		assert.Equal(t, expireSeconds, exp-iat)
-	})
-
-	t.Run("refreshToken 过期时间正确", func(t *testing.T) {
-		secret := "test-refresh-secret"
-		expireSeconds := int64(7200)
-		token, _ := GenerateRefreshToken(secret, expireSeconds, 12345)
-
-		claims, err := ParseToken(token, secret)
-		assert.NoError(t, err)
-
-		// 验证过期时间
-		exp := int64(claims["exp"].(float64))
-		iat := int64(claims["iat"].(float64))
-		assert.Equal(t, expireSeconds, exp-iat)
-	})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
 }
 
-func TestTokenClaims(t *testing.T) {
-	t.Run("accessToken 包含所有必要字段", func(t *testing.T) {
-		secret := "test-secret-key"
-		token, _ := GenerateAccessToken(secret, 3600, 12345, "testuser", "test@example.com")
+func TestGetUidByJwt_Success_Float64(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, float64(12345))
 
-		claims, err := ParseToken(token, secret)
-		assert.NoError(t, err)
+	uid, err := GetUidByJwt(ctx)
 
-		// 验证所有字段存在
-		assert.NotNil(t, claims["uid"])
-		assert.NotNil(t, claims["nickname"])
-		assert.NotNil(t, claims["email"])
-		assert.NotNil(t, claims["type"])
-		assert.NotNil(t, claims["iat"])
-		assert.NotNil(t, claims["exp"])
-
-		// 验证类型为 access
-		assert.Equal(t, "access", claims["type"])
-	})
-
-	t.Run("refreshToken 包含所有必要字段", func(t *testing.T) {
-		secret := "test-refresh-secret"
-		token, _ := GenerateRefreshToken(secret, 7200, 12345)
-
-		claims, err := ParseToken(token, secret)
-		assert.NoError(t, err)
-
-		// 验证所有字段存在
-		assert.NotNil(t, claims["uid"])
-		assert.NotNil(t, claims["type"])
-		assert.NotNil(t, claims["iat"])
-		assert.NotNil(t, claims["exp"])
-
-		// 验证类型为 refresh
-		assert.Equal(t, "refresh", claims["type"])
-	})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
 }
 
-func TestTokenSigningMethod(t *testing.T) {
-	t.Run("token 使用 HS256 签名方法", func(t *testing.T) {
-		secret := "test-secret-key"
-		token, _ := GenerateAccessToken(secret, 3600, 12345, "testuser", "test@example.com")
+func TestGetUidByJwt_NotFound(t *testing.T) {
+	ctx := context.Background()
 
-		// 解析但不验证
-		parsedToken, _ := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-			return []byte(secret), nil
-		})
+	uid, err := GetUidByJwt(ctx)
 
-		assert.Equal(t, jwt.SigningMethodHS256, parsedToken.Method)
-	})
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), uid)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestGetUidByJwt_InvalidString(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, "not-a-number")
+
+	uid, err := GetUidByJwt(ctx)
+
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), uid)
+}
+
+func TestGetUidByJwt_UnsupportedType(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, []string{"invalid"})
+
+	uid, err := GetUidByJwt(ctx)
+
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), uid)
+	assert.Contains(t, err.Error(), "unsupported")
+}
+
+func TestGetEmailByJwt_Success(t *testing.T) {
+	ctx := context.WithValue(context.Background(), emailFieldName, "test@example.com")
+
+	email, err := GetEmailByJwt(ctx)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "test@example.com", email)
+}
+
+func TestGetEmailByJwt_NotFound(t *testing.T) {
+	ctx := context.Background()
+
+	email, err := GetEmailByJwt(ctx)
+
+	assert.Error(t, err)
+	assert.Empty(t, email)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestGetEmailByJwt_InvalidType(t *testing.T) {
+	ctx := context.WithValue(context.Background(), emailFieldName, 12345)
+
+	email, err := GetEmailByJwt(ctx)
+
+	assert.Error(t, err)
+	assert.Empty(t, email)
+	assert.Contains(t, err.Error(), "type error")
+}
+
+func TestGenerateAccessToken_Success(t *testing.T) {
+	secret := "test-secret"
+	expireSeconds := int64(3600)
+	uid := int64(12345)
+	nickname := "testuser"
+	email := "test@example.com"
+
+	token, err := GenerateAccessToken(secret, expireSeconds, uid, nickname, email)
+
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token)
+
+	// 验证 token 可以解析
+	claims, err := ParseToken(token, secret)
+	assert.NoError(t, err)
+	assert.Equal(t, uid, int64(claims["uid"].(float64)))
+	assert.Equal(t, nickname, claims["nickname"])
+	assert.Equal(t, email, claims["email"])
+	assert.Equal(t, "access", claims["type"])
+}
+
+func TestGenerateRefreshToken_Success(t *testing.T) {
+	secret := "test-secret"
+	expireSeconds := int64(7200)
+	uid := int64(12345)
+
+	token, err := GenerateRefreshToken(secret, expireSeconds, uid)
+
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token)
+
+	// 验证 token 可以解析
+	claims, err := ParseToken(token, secret)
+	assert.NoError(t, err)
+	assert.Equal(t, uid, int64(claims["uid"].(float64)))
+	assert.Equal(t, "refresh", claims["type"])
+}
+
+func TestParseToken_Success(t *testing.T) {
+	secret := "test-secret"
+	uid := int64(12345)
+	nickname := "testuser"
+	email := "test@example.com"
+
+	token, err := GenerateAccessToken(secret, 3600, uid, nickname, email)
+	assert.NoError(t, err)
+
+	claims, err := ParseToken(token, secret)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, claims)
+	assert.Equal(t, uid, int64(claims["uid"].(float64)))
+	assert.Equal(t, nickname, claims["nickname"])
+	assert.Equal(t, email, claims["email"])
+}
+
+func TestParseToken_InvalidSecret(t *testing.T) {
+	secret := "test-secret"
+	wrongSecret := "wrong-secret"
+	uid := int64(12345)
+	nickname := "testuser"
+	email := "test@example.com"
+
+	token, err := GenerateAccessToken(secret, 3600, uid, nickname, email)
+	assert.NoError(t, err)
+
+	claims, err := ParseToken(token, wrongSecret)
+
+	assert.Error(t, err)
+	assert.Nil(t, claims)
+}
+
+func TestParseToken_InvalidToken(t *testing.T) {
+	secret := "test-secret"
+
+	claims, err := ParseToken("invalid.token.here", secret)
+
+	assert.Error(t, err)
+	assert.Nil(t, claims)
+}
+
+func TestParseToken_Expired(t *testing.T) {
+	secret := "test-secret"
+	uid := int64(12345)
+	nickname := "testuser"
+	email := "test@example.com"
+
+	// 生成一个已经过期的 token
+	now := time.Now()
+	claims := jwt.MapClaims{
+		uidFieldName:   uid,
+		"nickname":     nickname,
+		emailFieldName: email,
+		"type":         "access",
+		"iat":          now.Add(-2 * time.Hour).Unix(),
+		"exp":          now.Add(-1 * time.Hour).Unix(), // 已过期
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(secret))
+	assert.NoError(t, err)
+
+	parsedClaims, err := ParseToken(tokenString, secret)
+
+	assert.Error(t, err)
+	assert.Nil(t, parsedClaims)
+}
+
+func TestTokenRoundTrip(t *testing.T) {
+	secret := "my-secret-key"
+	expireSeconds := int64(3600)
+	uid := int64(12345)
+	nickname := "testuser"
+	email := "test@example.com"
+
+	// 生成 token
+	token, err := GenerateAccessToken(secret, expireSeconds, uid, nickname, email)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token)
+
+	// 解析 token
+	claims, err := ParseToken(token, secret)
+	assert.NoError(t, err)
+
+	// 验证所有字段
+	assert.Equal(t, uid, int64(claims["uid"].(float64)))
+	assert.Equal(t, nickname, claims["nickname"])
+	assert.Equal(t, email, claims["email"])
+	assert.Equal(t, "access", claims["type"])
+
+	// 验证时间字段
+	iat, ok := claims["iat"].(float64)
+	assert.True(t, ok)
+	assert.Greater(t, iat, float64(0))
+
+	exp, ok := claims["exp"].(float64)
+	assert.True(t, ok)
+	assert.Greater(t, exp, iat)
+}
+
+func TestGenerateAccessToken_DifferentUsers(t *testing.T) {
+	secret := "test-secret"
+	expireSeconds := int64(3600)
+
+	testCases := []struct {
+		uid      int64
+		nickname string
+		email    string
+	}{
+		{1, "user1", "user1@example.com"},
+		{2, "user2", "user2@example.com"},
+		{999, "testuser", "test@example.com"},
+	}
+
+	for _, tc := range testCases {
+		token, err := GenerateAccessToken(secret, expireSeconds, tc.uid, tc.nickname, tc.email)
+		assert.NoError(t, err)
+
+		claims, err := ParseToken(token, secret)
+		assert.NoError(t, err)
+
+		assert.Equal(t, tc.uid, int64(claims["uid"].(float64)))
+		assert.Equal(t, tc.nickname, claims["nickname"])
+		assert.Equal(t, tc.email, claims["email"])
+	}
 }

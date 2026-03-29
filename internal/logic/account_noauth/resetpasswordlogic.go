@@ -6,6 +6,7 @@ package account_noauth
 import (
 	"context"
 
+	"user/internal/logic/accutil"
 	"user/internal/svc"
 	"user/internal/types"
 
@@ -31,23 +32,17 @@ func (l *ResetPasswordLogic) ResetPassword(req *types.ResetPasswordReq) (resp *t
 	codeType := l.svcCtx.Config.VerifyCodeConfig.Type.ResetPassword
 
 	// 检查验证码是否属于对应邮箱以及是否正确
-	if err := verifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
-		return nil, err
-	}
-
-	// 密码加密
-	newHashedPassword, err := hashPassword(req.Email, req.Password)
-	if err != nil {
+	if err := accutil.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
 		return nil, err
 	}
 
 	// 重置用户密码
-	if err := resetUserPassword(l.ctx, l.svcCtx, req.Email, newHashedPassword); err != nil {
+	if err := accutil.ResetUserPasswordByEmail(l.ctx, l.svcCtx, req.Email, req.Password); err != nil {
 		return nil, err
 	}
 
 	// 标记已被使用
-	markCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
+	accutil.MarkCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
 
 	return
 }

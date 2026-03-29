@@ -92,6 +92,7 @@ VerifyCodeConfig:
   Type:
     Register: register # 注册验证码
     ResetPassword: reset_password # 重置密码验证码
+    ChangePassword: change_password # 修改密码验证码
     RemindRegistered: remind_registered # 提醒注册验证码
 
   # 验证码时间相关配置参数

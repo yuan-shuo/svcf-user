@@ -1,21 +1,66 @@
 package utils
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
 
+const (
+	uidFieldName   string = "uid"
+	emailFieldName string = "email"
+)
+
+// GetUidByJwt 安全获取 uid，支持多种类型
+func GetUidByJwt(ctx context.Context) (int64, error) {
+	val := ctx.Value(uidFieldName)
+	if val == nil {
+		return 0, fmt.Errorf("uid not found in context")
+	}
+
+	switch v := val.(type) {
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	case json.Number: // ← 处理大数
+		return v.Int64()
+	case string:
+		return strconv.ParseInt(v, 10, 64)
+	case float64:
+		return int64(v), nil
+	default:
+		return 0, fmt.Errorf("uid type unsupported: %T, value: %v", v, v)
+	}
+}
+
+// GetEmailByJwt 安全获取 email
+func GetEmailByJwt(ctx context.Context) (string, error) {
+	val := ctx.Value(emailFieldName)
+	if val == nil {
+		return "", fmt.Errorf("email not found in context")
+	}
+
+	if s, ok := val.(string); ok {
+		return s, nil
+	}
+	return "", fmt.Errorf("email type error: %T", val)
+}
+
 // GenerateAccessToken 生成 Access Token
 func GenerateAccessToken(secret string, expireSeconds int64, uid int64, nickname, email string) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"uid":      uid,                                                        // 用户ID
-		"nickname": nickname,                                                   // 昵称（常用）
-		"email":    email,                                                      // 邮箱（常用）
-		"type":     "access",                                                   // token类型
-		"iat":      now.Unix(),                                                 // 签发时间
-		"exp":      now.Add(time.Duration(expireSeconds) * time.Second).Unix(), // 过期时间
+		uidFieldName:   uid,                                                        // 用户ID
+		"nickname":     nickname,                                                   // 昵称（常用）
+		emailFieldName: email,                                                      // 邮箱（常用）
+		"type":         "access",                                                   // token类型
+		"iat":          now.Unix(),                                                 // 签发时间
+		"exp":          now.Add(time.Duration(expireSeconds) * time.Second).Unix(), // 过期时间
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
