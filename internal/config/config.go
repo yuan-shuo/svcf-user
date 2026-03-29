@@ -53,6 +53,7 @@ type VerifyCodeTime struct {
 type VerifyCodeType struct {
 	Register         string // 注册验证码类型
 	ResetPassword    string // 重置密码验证码类型
+	ChangePassword   string // 修改密码验证码类型
 	RemindRegistered string // 邮箱已注册验证码类型(不会发送实际验证码而是仅提醒)
 }
 

@@ -280,48 +280,6 @@ func TestLoginLogic_getUserByEmail_DatabaseError(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestLoginLogic_verifyPassword_Success(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{}
-	logic := NewLoginLogic(ctx, svcCtx)
-
-	password := "testpassword123"
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
-	err := logic.verifyPassword(string(hashedPassword), password, "test@example.com")
-
-	assert.NoError(t, err)
-}
-
-func TestLoginLogic_verifyPassword_InvalidPassword(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{}
-	logic := NewLoginLogic(ctx, svcCtx)
-
-	correctPassword := "correctpassword"
-	wrongPassword := "wrongpassword"
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(correctPassword), bcrypt.DefaultCost)
-
-	err := logic.verifyPassword(string(hashedPassword), wrongPassword, "test@example.com")
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotExistOrPasswordIncorrect))
-}
-
-func TestLoginLogic_verifyPassword_HashError(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{}
-	logic := NewLoginLogic(ctx, svcCtx)
-
-	logx.Disable()
-
-	// 使用无效的哈希
-	err := logic.verifyPassword("invalidhash", "password", "test@example.com")
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError))
-}
-
 func TestLoginLogic_generateAccessToken_Success(t *testing.T) {
 	ctx := context.Background()
 	svcCtx := &svc.ServiceContext{

@@ -15,6 +15,8 @@ func HashPassword(password string) (string, error) {
 }
 
 // ComparePassword 验证密码是否与哈希匹配, 一致则err=nil
+// hashedPassword: 数据库存储的 bcrypt 哈希密码
+// password: 用户直接输入的明文密码
 func ComparePassword(hashedPassword, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }

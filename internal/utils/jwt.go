@@ -1,21 +1,36 @@
 package utils
 
 import (
+	"context"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
 
+const (
+	uidFieldName   string = "uid"
+	emailFieldName string = "email"
+)
+
+// 类型字段安全型，基于jwt安全获取uid
+func GetUidByJwt(ctx context.Context) int64 {
+	return ctx.Value(uidFieldName).(int64)
+}
+
+func GetEmailByJwt(ctx context.Context) string {
+	return ctx.Value(emailFieldName).(string)
+}
+
 // GenerateAccessToken 生成 Access Token
 func GenerateAccessToken(secret string, expireSeconds int64, uid int64, nickname, email string) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"uid":      uid,                                                        // 用户ID
-		"nickname": nickname,                                                   // 昵称（常用）
-		"email":    email,                                                      // 邮箱（常用）
-		"type":     "access",                                                   // token类型
-		"iat":      now.Unix(),                                                 // 签发时间
-		"exp":      now.Add(time.Duration(expireSeconds) * time.Second).Unix(), // 过期时间
+		uidFieldName:   uid,                                                        // 用户ID
+		"nickname":     nickname,                                                   // 昵称（常用）
+		emailFieldName: email,                                                      // 邮箱（常用）
+		"type":         "access",                                                   // token类型
+		"iat":          now.Unix(),                                                 // 签发时间
+		"exp":          now.Add(time.Duration(expireSeconds) * time.Second).Unix(), // 过期时间
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

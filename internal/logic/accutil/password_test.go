@@ -80,7 +80,59 @@ func TestResetUserPassword_Success(t *testing.T) {
 
 	ctx := context.Background()
 	email := "test@example.com"
-	newPassword := "newhashedpassword"
+	newPassword := "newpassword123"
+
+	// 设置 mock 期望
+	existingUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  123456789,
+		Email:        email,
+		Nickname:     "testuser",
+		PasswordHash: "oldhashedpassword",
+	}
+
+	// 设置 Update mock 期望
+	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(nil)
+
+	// 直接使用 ResetUserPassword，传入 user 对象
+	err := ResetUserPassword(ctx, svcCtx, existingUser, newPassword)
+
+	assert.NoError(t, err)
+	// 验证密码已被更新
+	assert.NotEqual(t, "oldhashedpassword", existingUser.PasswordHash)
+	mockUsersModel.AssertExpectations(t)
+}
+
+func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
+	_, _, _, svcCtx := setupPasswordTest(t)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	oldPassword := "oldpassword123"
+
+	// 创建一个已有密码的用户
+	hashedOldPassword, _ := HashPassword(email, oldPassword)
+	existingUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  123456789,
+		Email:        email,
+		Nickname:     "testuser",
+		PasswordHash: hashedOldPassword,
+	}
+
+	// 尝试使用相同的密码重置
+	err := ResetUserPassword(ctx, svcCtx, existingUser, oldPassword)
+
+	assert.Error(t, err)
+	assert.True(t, mock.IsCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
+}
+
+func TestResetUserPasswordByEmail_Success(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	newPassword := "newpassword123"
 
 	// 设置 mock 期望
 	existingUser := &model.Users{
@@ -91,96 +143,116 @@ func TestResetUserPassword_Success(t *testing.T) {
 		PasswordHash: "oldhashedpassword",
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock2.MatchedBy(func(u *model.Users) bool {
-		return u.PasswordHash == newPassword
-	})).Return(nil)
+	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(nil)
 
-	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
+	err := ResetUserPasswordByEmail(ctx, svcCtx, email, newPassword)
 
 	assert.NoError(t, err)
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestResetUserPassword_UserNotFound(t *testing.T) {
+func TestResetUserPasswordByEmail_UserNotFound(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
 
 	ctx := context.Background()
 	email := "test@example.com"
-	newPassword := "newhashedpassword"
+	newPassword := "newpassword123"
 
 	// 设置 mock 期望 - 用户不存在
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
 
-	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
+	err := ResetUserPasswordByEmail(ctx, svcCtx, email, newPassword)
 
 	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotFound), "应该是用户不存在错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestResetUserPassword_FindUserError(t *testing.T) {
+func TestGetUserByEmail_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
 
 	ctx := context.Background()
 	email := "test@example.com"
-	newPassword := "newhashedpassword"
 
-	// 设置 mock 期望 - 数据库查询错误
+	expectedUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  123456789,
+		Email:        email,
+		Nickname:     "testuser",
+		PasswordHash: "hashedpassword",
+	}
+	mockUsersModel.On("FindOneByEmail", ctx, email).Return(expectedUser, nil)
+
+	user, err := GetUserByEmail(ctx, svcCtx, email)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, email, user.Email)
+	mockUsersModel.AssertExpectations(t)
+}
+
+func TestGetUserByEmail_NotFound(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
+
+	ctx := context.Background()
+	email := "nonexistent@example.com"
+
+	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
+
+	user, err := GetUserByEmail(ctx, svcCtx, email)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotFound), "应该是用户不存在错误")
+	mockUsersModel.AssertExpectations(t)
+}
+
+func TestGetUserByEmail_DatabaseError(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
+
+	ctx := context.Background()
+	email := "test@example.com"
+
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, errors.New("database connection failed"))
 
-	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
+	user, err := GetUserByEmail(ctx, svcCtx, email)
 
 	assert.Error(t, err)
+	assert.Nil(t, user)
 	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestResetUserPassword_UpdateFailed(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
-
-	ctx := context.Background()
+func TestVerifyPasswordWithVagueMismatchErrHint_Success(t *testing.T) {
 	email := "test@example.com"
-	newPassword := "newhashedpassword"
+	password := "password123"
+	hashedPassword, _ := HashPassword(email, password)
 
-	// 设置 mock 期望
-	existingUser := &model.Users{
-		Id:           1,
-		SnowflakeId:  123456789,
-		Email:        email,
-		Nickname:     "testuser",
-		PasswordHash: "oldhashedpassword",
-	}
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(errors.New("update failed"))
+	err := VerifyPasswordWithVagueMismatchErrHint(hashedPassword, password, email)
 
-	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-	mockUsersModel.AssertExpectations(t)
+	assert.NoError(t, err)
 }
 
-func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
-
-	ctx := context.Background()
+func TestVerifyPasswordWithVagueMismatchErrHint_InvalidPassword(t *testing.T) {
 	email := "test@example.com"
-	oldPassword := "oldhashedpassword"
+	password := "password123"
+	wrongPassword := "wrongpassword"
+	hashedPassword, _ := HashPassword(email, password)
 
-	// 设置 mock 期望 - 新密码与旧密码相同
-	existingUser := &model.Users{
-		Id:           1,
-		SnowflakeId:  123456789,
-		Email:        email,
-		Nickname:     "testuser",
-		PasswordHash: oldPassword,
-	}
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	// 注意：由于密码相同，不会调用 Update
-
-	err := ResetUserPassword(ctx, svcCtx, email, oldPassword)
+	err := VerifyPasswordWithVagueMismatchErrHint(hashedPassword, wrongPassword, email)
 
 	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
-	mockUsersModel.AssertExpectations(t)
+	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotExistOrPasswordIncorrect), "应该是用户不存在或密码错误")
+}
+
+func TestVerifyPasswordWithOldPasswordMismatchErrHint_InvalidPassword(t *testing.T) {
+	email := "test@example.com"
+	password := "password123"
+	wrongPassword := "wrongpassword"
+	hashedPassword, _ := HashPassword(email, password)
+
+	err := VerifyPasswordWithOldPasswordMismatchErrHint(hashedPassword, wrongPassword, email)
+
+	assert.Error(t, err)
+	assert.True(t, mock.IsCodeError(err, errs.CodeOldPasswordIncorrect), "应该是旧密码错误")
 }

@@ -28,4 +28,5 @@ var errorHTTPStatus = map[int]int{
 
 	CodeUserNotExistOrPasswordIncorrect: http.StatusUnauthorized, // 401 登录时用户名不存在或密码错误
 	CodePasswordSameAsOld:               http.StatusBadRequest,   // 400 新密码与旧密码相同
+	CodeOldPasswordIncorrect:            http.StatusUnauthorized, // 401 旧密码错误
 }

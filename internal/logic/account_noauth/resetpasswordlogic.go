@@ -36,14 +36,8 @@ func (l *ResetPasswordLogic) ResetPassword(req *types.ResetPasswordReq) (resp *t
 		return nil, err
 	}
 
-	// 密码加密
-	newHashedPassword, err := accutil.HashPassword(req.Email, req.Password)
-	if err != nil {
-		return nil, err
-	}
-
 	// 重置用户密码
-	if err := accutil.ResetUserPassword(l.ctx, l.svcCtx, req.Email, newHashedPassword); err != nil {
+	if err := accutil.ResetUserPasswordByEmail(l.ctx, l.svcCtx, req.Email, req.Password); err != nil {
 		return nil, err
 	}
 

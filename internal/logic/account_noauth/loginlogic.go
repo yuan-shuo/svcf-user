@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	"user/internal/errs"
+	"user/internal/logic/accutil"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type LoginLogic struct {
@@ -40,7 +40,7 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 	}
 
 	// 2. 校验密码
-	if err := l.verifyPassword(user.PasswordHash, req.Password, req.Email); err != nil {
+	if err := accutil.VerifyPasswordWithVagueMismatchErrHint(user.PasswordHash, req.Password, req.Email); err != nil {
 		return nil, err
 	}
 
@@ -77,17 +77,17 @@ func (l *LoginLogic) getUserByEmail(email string) (*model.Users, error) {
 	return user, nil
 }
 
-// 2. 密码校验模块
-func (l *LoginLogic) verifyPassword(hashedPassword, password, email string) error {
-	if err := utils.ComparePassword(hashedPassword, password); err != nil {
-		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-			return errs.New(errs.CodeUserNotExistOrPasswordIncorrect)
-		}
-		logx.Errorf("用户登录密码校验失败, email=%s, err=%v", email, err)
-		return errs.New(errs.CodeInternalError)
-	}
-	return nil
-}
+// // 2. 密码校验模块
+// func (l *LoginLogic) verifyPassword(hashedPassword, password, email string) error {
+// 	if err := utils.ComparePassword(hashedPassword, password); err != nil {
+// 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+// 			return errs.New(errs.CodeUserNotExistOrPasswordIncorrect)
+// 		}
+// 		logx.Errorf("用户登录密码校验失败, email=%s, err=%v", email, err)
+// 		return errs.New(errs.CodeInternalError)
+// 	}
+// 	return nil
+// }
 
 // 3. 签发 accessToken
 func (l *LoginLogic) generateAccessToken(user *model.Users) (string, error) {

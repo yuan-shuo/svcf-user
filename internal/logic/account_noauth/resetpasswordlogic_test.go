@@ -224,7 +224,7 @@ func TestResetPasswordLogic_ResetPassword_UserNotFound(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotFound), "应该是用户不存在错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
