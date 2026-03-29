@@ -18,4 +18,5 @@ var codeMsg = map[int]string{
 	CodeEmailNotVerified:                "邮箱未验证",
 	CodeEmailNotRegistered:              "该邮箱未注册",
 	CodeUserNotExistOrPasswordIncorrect: "登录时用户名不存在或密码错误",
+	CodePasswordSameAsOld:               "新密码与旧密码相同",
 }

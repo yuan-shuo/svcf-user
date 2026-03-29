@@ -458,3 +458,28 @@ func TestResetUserPassword_UpdateFailed(t *testing.T) {
 	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }
+
+func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupCommonTest(t)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	oldPassword := "oldhashedpassword"
+
+	// 设置 mock 期望 - 新密码与旧密码相同
+	existingUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  123456789,
+		Email:        email,
+		Nickname:     "testuser",
+		PasswordHash: oldPassword,
+	}
+	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
+	// 注意：由于密码相同，不会调用 Update
+
+	err := resetUserPassword(ctx, svcCtx, email, oldPassword)
+
+	assert.Error(t, err)
+	assert.True(t, isCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
+	mockUsersModel.AssertExpectations(t)
+}

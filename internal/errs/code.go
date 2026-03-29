@@ -30,5 +30,6 @@ const (
 	CodeEmailNotRegistered = 2008 // 邮箱未注册
 
 	CodeUserNotExistOrPasswordIncorrect = 2100 // 登录时用户名不存在或密码错误
+	CodePasswordSameAsOld               = 2101 // 新密码与旧密码相同
 
 )

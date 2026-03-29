@@ -92,6 +92,11 @@ func resetUserPassword(ctx context.Context, svcCtx *svc.ServiceContext, email, n
 		return errs.New(errs.CodeInternalError)
 	}
 
+	// 检查新密码是否与旧密码相同
+	if user.PasswordHash == newPassword {
+		return errs.New(errs.CodePasswordSameAsOld)
+	}
+
 	// 重设密码
 	user.PasswordHash = newPassword
 	// 更新数据库密码
