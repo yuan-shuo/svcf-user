@@ -2,25 +2,62 @@ package accutil
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"user/internal/config"
 	"user/internal/errs"
 	"user/internal/mock"
-	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/utils"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-	mock2 "github.com/stretchr/testify/mock"
 	"github.com/zeromicro/go-zero/core/stores/redis"
-	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
-func TestCommonBuildBaseKey(t *testing.T) {
+// 在测试中使用局部常量，避免与包级常量冲突
+const (
+	VerifyKeyConst = "verify"
+	LimitKeyConst  = "limit"
+)
+
+// setupRedisTest 设置 Redis 测试环境
+func setupRedisTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.UsersModel, *svc.ServiceContext) {
+	// 创建 miniredis
+	s := miniredis.RunT(t)
+
+	// 创建 redis 客户端
+	rds := redis.New(s.Addr())
+
+	// 创建 mock users model
+	mockUsersModel := new(mock.UsersModel)
+
+	// 创建 service context
+	svcCtx := &svc.ServiceContext{
+		Config: config.Config{
+			VerifyCodeConfig: config.VerifyCodeConfig{
+				Type: config.VerifyCodeType{
+					Register:      "register",
+					ResetPassword: "reset_password",
+				},
+				Redis: config.VerifyCodeRedisConfig{
+					KeyPrefix: "account",
+				},
+			},
+		},
+		Redis:      rds,
+		UsersModel: mockUsersModel,
+	}
+
+	// 初始化雪花算法
+	err := utils.InitSonyflake(1, "2024-01-01")
+	assert.NoError(t, err)
+
+	return s, rds, mockUsersModel, svcCtx
+}
+
+func TestRedisBuildBaseKey(t *testing.T) {
 	tests := []struct {
 		name     string
 		codeType string
@@ -61,7 +98,7 @@ func TestCommonBuildBaseKey(t *testing.T) {
 	}
 }
 
-func TestCommonBuildVerifyKey(t *testing.T) {
+func TestRedisBuildVerifyKey(t *testing.T) {
 	tests := []struct {
 		name     string
 		email    string
@@ -114,7 +151,7 @@ func TestCommonBuildVerifyKey(t *testing.T) {
 	}
 }
 
-func TestCommonBuildLimitKey(t *testing.T) {
+func TestRedisBuildLimitKey(t *testing.T) {
 	tests := []struct {
 		name     string
 		email    string
@@ -177,7 +214,7 @@ func TestRedisKeyConstants(t *testing.T) {
 	})
 }
 
-func TestKeyConsistency(t *testing.T) {
+func TestRedisKeyConsistency(t *testing.T) {
 	t.Run("验证key构建的一致性", func(t *testing.T) {
 		email := "test@example.com"
 		codeType := "register"
@@ -198,49 +235,8 @@ func TestKeyConsistency(t *testing.T) {
 	})
 }
 
-// 在测试中使用局部常量，避免与包级常量冲突
-const (
-	VerifyKeyConst = "verify"
-	LimitKeyConst  = "limit"
-)
-
-// setupCommonTest 设置通用测试环境
-func setupCommonTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.UsersModel, *svc.ServiceContext) {
-	// 创建 miniredis
-	s := miniredis.RunT(t)
-
-	// 创建 redis 客户端
-	rds := redis.New(s.Addr())
-
-	// 创建 mock users model
-	mockUsersModel := new(mock.UsersModel)
-
-	// 创建 service context
-	svcCtx := &svc.ServiceContext{
-		Config: config.Config{
-			VerifyCodeConfig: config.VerifyCodeConfig{
-				Type: config.VerifyCodeType{
-					Register:      "register",
-					ResetPassword: "reset_password",
-				},
-				Redis: config.VerifyCodeRedisConfig{
-					KeyPrefix: "account",
-				},
-			},
-		},
-		Redis:      rds,
-		UsersModel: mockUsersModel,
-	}
-
-	// 初始化雪花算法
-	err := utils.InitSonyflake(1, "2024-01-01")
-	assert.NoError(t, err)
-
-	return s, rds, mockUsersModel, svcCtx
-}
-
 func TestVerifyEmailAndCodeInRedis_Success(t *testing.T) {
-	s, _, _, svcCtx := setupCommonTest(t)
+	s, _, _, svcCtx := setupRedisTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -260,7 +256,7 @@ func TestVerifyEmailAndCodeInRedis_Success(t *testing.T) {
 }
 
 func TestVerifyEmailAndCodeInRedis_InvalidCode(t *testing.T) {
-	s, _, _, svcCtx := setupCommonTest(t)
+	s, _, _, svcCtx := setupRedisTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -281,7 +277,7 @@ func TestVerifyEmailAndCodeInRedis_InvalidCode(t *testing.T) {
 }
 
 func TestVerifyEmailAndCodeInRedis_CodeNotFound(t *testing.T) {
-	s, _, _, svcCtx := setupCommonTest(t)
+	s, _, _, svcCtx := setupRedisTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -298,7 +294,7 @@ func TestVerifyEmailAndCodeInRedis_CodeNotFound(t *testing.T) {
 }
 
 func TestVerifyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
-	s, _, _, svcCtx := setupCommonTest(t)
+	s, _, _, svcCtx := setupRedisTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -319,7 +315,7 @@ func TestVerifyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
 }
 
 func TestMarkCodeAsUsed_Success(t *testing.T) {
-	s, _, _, svcCtx := setupCommonTest(t)
+	s, _, _, svcCtx := setupRedisTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -341,7 +337,7 @@ func TestMarkCodeAsUsed_Success(t *testing.T) {
 }
 
 func TestMarkCodeAsUsed_KeyNotExist(t *testing.T) {
-	s, _, _, svcCtx := setupCommonTest(t)
+	s, _, _, svcCtx := setupRedisTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -353,135 +349,4 @@ func TestMarkCodeAsUsed_KeyNotExist(t *testing.T) {
 
 	// 不应该 panic 或报错
 	assert.True(t, true)
-}
-
-func TestHashPassword_Success(t *testing.T) {
-	email := "test@example.com"
-	password := "password123"
-
-	hashed, err := HashPassword(email, password)
-
-	assert.NoError(t, err)
-	assert.NotEmpty(t, hashed)
-	assert.NotEqual(t, password, hashed) // 哈希后的密码应该与原密码不同
-}
-
-func TestHashPassword_EmptyPassword(t *testing.T) {
-	email := "test@example.com"
-	password := ""
-
-	hashed, err := HashPassword(email, password)
-
-	assert.NoError(t, err)
-	assert.NotEmpty(t, hashed) // 空密码也应该能生成哈希
-}
-
-func TestResetUserPassword_Success(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupCommonTest(t)
-
-	ctx := context.Background()
-	email := "test@example.com"
-	newPassword := "newhashedpassword"
-
-	// 设置 mock 期望
-	existingUser := &model.Users{
-		Id:           1,
-		SnowflakeId:  123456789,
-		Email:        email,
-		Nickname:     "testuser",
-		PasswordHash: "oldhashedpassword",
-	}
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock2.MatchedBy(func(u *model.Users) bool {
-		return u.PasswordHash == newPassword
-	})).Return(nil)
-
-	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
-
-	assert.NoError(t, err)
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestResetUserPassword_UserNotFound(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupCommonTest(t)
-
-	ctx := context.Background()
-	email := "test@example.com"
-	newPassword := "newhashedpassword"
-
-	// 设置 mock 期望 - 用户不存在
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
-
-	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestResetUserPassword_FindUserError(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupCommonTest(t)
-
-	ctx := context.Background()
-	email := "test@example.com"
-	newPassword := "newhashedpassword"
-
-	// 设置 mock 期望 - 数据库查询错误
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, errors.New("database connection failed"))
-
-	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestResetUserPassword_UpdateFailed(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupCommonTest(t)
-
-	ctx := context.Background()
-	email := "test@example.com"
-	newPassword := "newhashedpassword"
-
-	// 设置 mock 期望
-	existingUser := &model.Users{
-		Id:           1,
-		SnowflakeId:  123456789,
-		Email:        email,
-		Nickname:     "testuser",
-		PasswordHash: "oldhashedpassword",
-	}
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(errors.New("update failed"))
-
-	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupCommonTest(t)
-
-	ctx := context.Background()
-	email := "test@example.com"
-	oldPassword := "oldhashedpassword"
-
-	// 设置 mock 期望 - 新密码与旧密码相同
-	existingUser := &model.Users{
-		Id:           1,
-		SnowflakeId:  123456789,
-		Email:        email,
-		Nickname:     "testuser",
-		PasswordHash: oldPassword,
-	}
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	// 注意：由于密码相同，不会调用 Update
-
-	err := ResetUserPassword(ctx, svcCtx, email, oldPassword)
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
-	mockUsersModel.AssertExpectations(t)
 }
