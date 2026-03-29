@@ -1,6 +1,9 @@
 package errs
 
-import "errors"
+import (
+	"errors"
+	"net/http"
+)
 
 // CodeError 带错误码的错误类型
 type CodeError struct {
@@ -25,11 +28,27 @@ func GetMsg(code int) string {
 	return "未知错误"
 }
 
+// 返回错误码+错误信息json
 func (e *CodeError) Data() *CodeErrorResponse {
 	return &CodeErrorResponse{
 		Code: e.Code,
 		Msg:  e.Msg,
 	}
+}
+
+// 统一错误返回处理器
+func ErrsHandler(err error) (int, any) {
+	switch e := err.(type) {
+	case *CodeError:
+		return e.judgeErrsStatus(), e.Data()
+	default:
+		return http.StatusInternalServerError, nil
+	}
+}
+
+// 统一管理http错误码返回方式
+func (e *CodeError) judgeErrsStatus() int {
+	return errorHTTPStatus[e.Code]
 }
 
 // New 创建一个新的 CodeError

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"user/internal/config"
 	"user/internal/db"
+	"user/internal/metrics"
 	"user/internal/model"
 	"user/internal/utils"
 
@@ -16,10 +17,11 @@ import (
 )
 
 type ServiceContext struct {
-	Config         config.Config
-	KqPusherClient KqPusherClient
-	Redis          *redis.Redis
-	UsersModel     model.UsersModel
+	Config         config.Config           // 配置文件
+	KqPusherClient KqPusherClient          // 生产者实例
+	Redis          *redis.Redis            // redis 数据库
+	UsersModel     model.UsersModel        // SQL 数据库
+	Metrics        *metrics.MetricsManager // 观测指标
 }
 
 // 定义为接口方便单元测试
@@ -48,5 +50,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		),
 		Redis:      db.NewRedis(c.RedisConfig),
 		UsersModel: model.NewUsersModel(db.NewPostgreSQL(c.PostgreSQL), c.CacheRedis),
+		Metrics:    metrics.NewMetricsManager(),
 	}
 }

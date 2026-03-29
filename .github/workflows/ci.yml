@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["*"]
+    branches: ["**"]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -111,6 +111,23 @@ jobs:
         ls -la ./internal/model/
         echo "usersmodel_gen.go exists:"
         ls -la ./internal/model/usersmodel_gen.go || echo "usersmodel_gen.go not found"
+
+    - name: Install gometrics
+      run: |
+        go install github.com/yuan-shuo/gometrics@latest
+        echo "gometrics installed"
+
+    - name: Generate metrics code
+      run: |
+        echo "Generating metrics code..."
+        gometrics -f metrics.yaml -d ./internal/metrics
+        echo "Metrics code generated"
+
+    - name: Verify metrics generated code
+      run: |
+        ls -la ./internal/metrics/
+        echo "metrics_gen.go exists:"
+        ls -la ./internal/metrics/metrics_gen.go || echo "metrics_gen.go not found"
 
     - name: Run all tests
       env:

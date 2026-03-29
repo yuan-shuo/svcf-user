@@ -79,8 +79,8 @@ func (m *MockSqlResult) RowsAffected() (int64, error) {
 	return m.ra, nil
 }
 
-// setupTest 设置测试环境
-func setupTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUsersModel, *svc.ServiceContext) {
+// setupRegisterTest 设置注册测试环境
+func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUsersModel, *svc.ServiceContext) {
 	// 创建 miniredis
 	s := miniredis.RunT(t)
 
@@ -125,7 +125,7 @@ func isCodeError(err error, code int) bool {
 }
 
 func TestRegisterLogic_Register_Success(t *testing.T) {
-	s, _, mockUsersModel, svcCtx := setupTest(t)
+	s, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -169,7 +169,7 @@ func TestRegisterLogic_Register_Success(t *testing.T) {
 }
 
 func TestRegisterLogic_Register_InvalidCode(t *testing.T) {
-	s, _, _, svcCtx := setupTest(t)
+	s, _, _, svcCtx := setupRegisterTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -202,7 +202,7 @@ func TestRegisterLogic_Register_InvalidCode(t *testing.T) {
 }
 
 func TestRegisterLogic_Register_CodeExpired(t *testing.T) {
-	s, _, _, svcCtx := setupTest(t)
+	s, _, _, svcCtx := setupRegisterTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -228,7 +228,7 @@ func TestRegisterLogic_Register_CodeExpired(t *testing.T) {
 }
 
 func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
-	s, _, _, svcCtx := setupTest(t)
+	s, _, _, svcCtx := setupRegisterTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -261,7 +261,7 @@ func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
 }
 
 func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
-	s, _, mockUsersModel, svcCtx := setupTest(t)
+	s, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -305,7 +305,7 @@ func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
 }
 
 func TestRegisterLogic_Register_DatabaseError(t *testing.T) {
-	s, _, mockUsersModel, svcCtx := setupTest(t)
+	s, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -342,7 +342,7 @@ func TestRegisterLogic_Register_DatabaseError(t *testing.T) {
 }
 
 func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
-	s, _, mockUsersModel, svcCtx := setupTest(t)
+	s, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 	defer s.Close()
 
 	ctx := context.Background()
@@ -379,8 +379,8 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestRegisterLogic_createUser(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupTest(t)
+func TestRegisterLogic_createUser_Success(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 
 	ctx := context.Background()
 	logic := NewRegisterLogic(ctx, svcCtx)
@@ -404,8 +404,28 @@ func TestRegisterLogic_createUser(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
+func TestRegisterLogic_createUser_InsertFailed(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
+
+	ctx := context.Background()
+	logic := NewRegisterLogic(ctx, svcCtx)
+
+	nickname := "testuser"
+	email := "test@example.com"
+	passwd := "hashedpassword"
+
+	// 设置 mock 期望 - 插入失败
+	mockUsersModel.On("Insert", ctx, mock.AnythingOfType("*model.Users")).Return(&MockSqlResult{}, errors.New("insert failed"))
+
+	err := logic.createUser(nickname, email, passwd)
+
+	assert.Error(t, err)
+	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	mockUsersModel.AssertExpectations(t)
+}
+
 func TestRegisterLogic_checkIfEmailHasBeenRegistered_NotFound(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupTest(t)
+	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 
 	ctx := context.Background()
 	logic := NewRegisterLogic(ctx, svcCtx)
@@ -422,7 +442,7 @@ func TestRegisterLogic_checkIfEmailHasBeenRegistered_NotFound(t *testing.T) {
 }
 
 func TestRegisterLogic_checkIfEmailHasBeenRegistered_Found(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupTest(t)
+	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 
 	ctx := context.Background()
 	logic := NewRegisterLogic(ctx, svcCtx)
@@ -446,7 +466,7 @@ func TestRegisterLogic_checkIfEmailHasBeenRegistered_Found(t *testing.T) {
 }
 
 func TestRegisterLogic_checkIfEmailHasBeenRegistered_DatabaseError(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupTest(t)
+	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
 
 	ctx := context.Background()
 	logic := NewRegisterLogic(ctx, svcCtx)
@@ -461,107 +481,4 @@ func TestRegisterLogic_checkIfEmailHasBeenRegistered_DatabaseError(t *testing.T)
 	assert.Error(t, err)
 	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
-}
-
-func TestRegisterLogic_verfiyEmailAndCodeInRedis_Success(t *testing.T) {
-	s, _, _, svcCtx := setupTest(t)
-	defer s.Close()
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	email := "test@example.com"
-	code := "123456"
-
-	// 在 redis 中设置验证码
-	key := "account:register:verify:" + email
-	s.HSet(key, "code", code)
-	s.HSet(key, "used", "0")
-	s.SetTTL(key, 5*time.Minute)
-
-	err := logic.verfiyEmailAndCodeInRedis(email, code)
-
-	assert.NoError(t, err)
-}
-
-func TestRegisterLogic_verfiyEmailAndCodeInRedis_CodeNotExist(t *testing.T) {
-	s, _, _, svcCtx := setupTest(t)
-	defer s.Close()
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	email := "test@example.com"
-	code := "123456"
-
-	err := logic.verfiyEmailAndCodeInRedis(email, code)
-
-	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
-}
-
-func TestRegisterLogic_verfiyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
-	s, _, _, svcCtx := setupTest(t)
-	defer s.Close()
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	email := "test@example.com"
-	code := "123456"
-
-	// 在 redis 中设置已使用的验证码
-	key := "account:register:verify:" + email
-	s.HSet(key, "code", code)
-	s.HSet(key, "used", "1")
-	s.SetTTL(key, 5*time.Minute)
-
-	err := logic.verfiyEmailAndCodeInRedis(email, code)
-
-	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
-}
-
-func TestRegisterLogic_verfiyEmailAndCodeInRedis_WrongCode(t *testing.T) {
-	s, _, _, svcCtx := setupTest(t)
-	defer s.Close()
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	email := "test@example.com"
-
-	// 在 redis 中设置验证码
-	key := "account:register:verify:" + email
-	s.HSet(key, "code", "123456")
-	s.HSet(key, "used", "0")
-	s.SetTTL(key, 5*time.Minute)
-
-	// 使用错误的验证码
-	err := logic.verfiyEmailAndCodeInRedis(email, "wrongcode")
-
-	assert.Error(t, err)
-	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
-}
-
-func TestRegisterLogic_markCodeAsUsed(t *testing.T) {
-	s, _, _, svcCtx := setupTest(t)
-	defer s.Close()
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	email := "test@example.com"
-
-	// 先在 redis 中设置验证码
-	key := "account:register:verify:" + email
-	s.HSet(key, "code", "123456")
-	s.HSet(key, "used", "0")
-
-	// 标记为已使用
-	logic.markCodeAsUsed(email)
-
-	// 验证
-	used := s.HGet(key, "used")
-	assert.Equal(t, "1", used)
 }

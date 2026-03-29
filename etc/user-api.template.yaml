@@ -103,6 +103,12 @@ VerifyCodeConfig:
   Redis:
     KeyPrefix: account # 验证码redis数据库键的前缀
 
+# prometheus 配置
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9101
+  Path: /metrics
+
 # --- 以下配置已废弃 ---
 
 # (2026-03-17 #1) 废弃原因: 照着gozero官方写的，但是这个场景为啥要让brokers和topic不一致?

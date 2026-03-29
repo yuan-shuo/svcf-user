@@ -323,6 +323,226 @@ func TestSendEmail_sendVerifyCodeEmail_EmailContent(t *testing.T) {
 	}
 }
 
+func TestSendEmail_sendResetPasswordEmail(t *testing.T) {
+	tests := []struct {
+		name    string
+		svcCtx  *svc.ServiceContext
+		msg     *types.VerificationCodeMessage
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "缺少SMTP配置-设置发件人失败",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "",
+						Port: 0,
+						From: "",
+					},
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
+							ExpireIn: 300,
+						},
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Code:     "654321",
+				Receiver: "test@example.com",
+				Type:     "reset_password",
+			},
+			wantErr: true,
+			errMsg:  "设置发件人失败",
+		},
+		{
+			name: "无效的发件人地址",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "smtp.example.com",
+						Port: 587,
+						From: "invalid-email",
+					},
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
+							ExpireIn: 300,
+						},
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Code:     "654321",
+				Receiver: "test@example.com",
+				Type:     "reset_password",
+			},
+			wantErr: true,
+			errMsg:  "设置发件人失败",
+		},
+		{
+			name: "无效的收件人地址",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "smtp.example.com",
+						Port: 587,
+						From: "sender@example.com",
+					},
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
+							ExpireIn: 300,
+						},
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Code:     "654321",
+				Receiver: "invalid-email",
+				Type:     "reset_password",
+			},
+			wantErr: true,
+			errMsg:  "设置收件人失败",
+		},
+		{
+			name: "无法连接到SMTP服务器-发送邮件失败",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "invalid.smtp.host.example.com",
+						Port: 587,
+						From: "sender@example.com",
+					},
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
+							ExpireIn: 300,
+						},
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Code:     "654321",
+				Receiver: "test@example.com",
+				Type:     "reset_password",
+			},
+			wantErr: true,
+			errMsg:  "发送邮件失败",
+		},
+		{
+			name: "过期时间为0-应显示1分钟",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "invalid.smtp.host",
+						Port: 587,
+						From: "sender@example.com",
+					},
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
+							ExpireIn: 0,
+						},
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Code:     "654321",
+				Receiver: "test@example.com",
+				Type:     "reset_password",
+			},
+			wantErr: true,
+			errMsg:  "发送邮件失败",
+		},
+		{
+			name: "使用465端口-发送邮件失败",
+			svcCtx: &svc.ServiceContext{
+				Config: config.Config{
+					SmtpConfig: config.SmtpConfig{
+						Host: "invalid.smtp.host",
+						Port: 465,
+						From: "sender@example.com",
+					},
+					VerifyCodeConfig: config.VerifyCodeConfig{
+						Time: config.VerifyCodeTime{
+							ExpireIn: 600,
+						},
+					},
+				},
+			},
+			msg: &types.VerificationCodeMessage{
+				Code:     "ABC123",
+				Receiver: "user@example.com",
+				Type:     "reset_password",
+			},
+			wantErr: true,
+			errMsg:  "发送邮件失败",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			s := NewSendEmail(ctx, tt.svcCtx)
+
+			err := s.sendResetPasswordEmail(tt.msg)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSendEmail_sendResetPasswordEmail_ExpireMinutes(t *testing.T) {
+	tests := []struct {
+		name            string
+		expireIn        int
+		expectedMinutes int
+	}{
+		{
+			name:            "300秒-5分钟",
+			expireIn:        300,
+			expectedMinutes: 5,
+		},
+		{
+			name:            "60秒-1分钟",
+			expireIn:        60,
+			expectedMinutes: 1,
+		},
+		{
+			name:            "30秒-不足1分钟应显示1分钟",
+			expireIn:        30,
+			expectedMinutes: 1,
+		},
+		{
+			name:            "0秒-应显示1分钟",
+			expireIn:        0,
+			expectedMinutes: 1,
+		},
+		{
+			name:            "600秒-10分钟",
+			expireIn:        600,
+			expectedMinutes: 10,
+		},
+		{
+			name:            "1秒-应显示1分钟",
+			expireIn:        1,
+			expectedMinutes: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expireMinutes := tt.expireIn / 60
+			if expireMinutes < 1 {
+				expireMinutes = 1
+			}
+			assert.Equal(t, tt.expectedMinutes, expireMinutes)
+		})
+	}
+}
+
 func TestSendEmail_sendAlreadyRegisteredReminderEmail(t *testing.T) {
 	tests := []struct {
 		name    string

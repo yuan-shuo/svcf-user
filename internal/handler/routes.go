@@ -27,7 +27,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodPost,
-				Path:    "/register/verifycode",
+				Path:    "/resetpassword",
+				Handler: account_noauth.ResetPasswordHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/verifycode",
 				Handler: account_noauth.SendVerifyCodeHandler(serverCtx),
 			},
 		},

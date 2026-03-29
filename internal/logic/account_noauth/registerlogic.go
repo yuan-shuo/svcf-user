@@ -6,7 +6,6 @@ package account_noauth
 import (
 	"context"
 	"database/sql"
-	"strings"
 
 	"user/internal/errs"
 	"user/internal/model"
@@ -33,9 +32,16 @@ func NewRegisterLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Register
 }
 
 func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterResp, err error) {
+	// 所需验证码类型 - 注册
+	codeType := l.svcCtx.Config.VerifyCodeConfig.Type.Register
 
-	// 检查邮箱及验证码是否正确
-	if err := l.verfiyEmailAndCodeInRedis(req.Email, req.Code); err != nil {
+	// // 检查邮箱及验证码是否正确
+	// if err := l.verfiyEmailAndCodeInRedis(req.Email, req.Code); err != nil {
+	// 	return nil, err
+	// }
+
+	// 检查验证码是否属于对应邮箱以及是否正确
+	if err := verifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
 		return nil, err
 	}
 
@@ -45,13 +51,19 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	}
 
 	// 密码加密
-	hashedPassword, err := utils.HashPassword(req.Password)
+	hashedPassword, err := hashPassword(req.Email, req.Password)
 	if err != nil {
-		// 记录详细错误日志
-		logx.Errorf("密码加密失败, email=%s, err=%v", req.Email, err)
-		// 返回通用错误给客户端
-		return nil, errs.New(errs.CodeInternalError)
+		return nil, err
 	}
+
+	// // 密码加密
+	// hashedPassword, err := utils.HashPassword(req.Password)
+	// if err != nil {
+	// 	// 记录详细错误日志
+	// 	logx.Errorf("密码加密失败, email=%s, err=%v", req.Email, err)
+	// 	// 返回通用错误给客户端
+	// 	return nil, errs.New(errs.CodeInternalError)
+	// }
 
 	// 数据库创建用户
 	if err := l.createUser(req.Nickname, req.Email, hashedPassword); err != nil {
@@ -60,7 +72,7 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	}
 
 	// 标记验证码已被使用
-	l.markCodeAsUsed(req.Email)
+	markCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
 
 	return
 }
@@ -103,38 +115,38 @@ func (l *RegisterLogic) checkIfEmailHasBeenRegistered(email string) error {
 	return nil
 }
 
-func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) error {
-	key := buildVerifyKey(email, l.svcCtx.Config.VerifyCodeConfig.Type.Register)
+// func (l *RegisterLogic) verfiyEmailAndCodeInRedis(email string, code string) error {
+// 	key := buildVerifyKey(email, l.svcCtx.Config.VerifyCodeConfig.Type.Register)
 
-	// 一次获取所有字段（Hgetall）
-	fields, err := l.svcCtx.Redis.HgetallCtx(l.ctx, key)
-	if err != nil {
-		logx.Errorf("获取验证码信息失败, email=%s, key=%s, err=%v", email, key, err)
-		return errs.New(errs.CodeInternalError)
-	}
+// 	// 一次获取所有字段（Hgetall）
+// 	fields, err := l.svcCtx.Redis.HgetallCtx(l.ctx, key)
+// 	if err != nil {
+// 		logx.Errorf("获取验证码信息失败, email=%s, key=%s, err=%v", email, key, err)
+// 		return errs.New(errs.CodeInternalError)
+// 	}
 
-	// 键不存在或没有 code 字段
-	if len(fields) == 0 || fields[redisValueCodeFieldName] == "" {
-		return errs.New(errs.CodeInvalidCode)
-	}
+// 	// 键不存在或没有 code 字段
+// 	if len(fields) == 0 || fields[redisValueCodeFieldName] == "" {
+// 		return errs.New(errs.CodeInvalidCode)
+// 	}
 
-	// 检查是否已使用
-	if fields[redisValueUsedFieldName] != "0" {
-		return errs.New(errs.CodeCodeAlreadyUsed)
-	}
+// 	// 检查是否已使用
+// 	if fields[redisValueUsedFieldName] != "0" {
+// 		return errs.New(errs.CodeCodeAlreadyUsed)
+// 	}
 
-	// 比对验证码
-	if !strings.EqualFold(fields[redisValueCodeFieldName], code) {
-		return errs.New(errs.CodeInvalidCode)
-	}
+// 	// 比对验证码
+// 	if !strings.EqualFold(fields[redisValueCodeFieldName], code) {
+// 		return errs.New(errs.CodeInvalidCode)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
-// 标记验证码为已使用
-func (l *RegisterLogic) markCodeAsUsed(email string) {
-	key := buildVerifyKey(email, l.svcCtx.Config.VerifyCodeConfig.Type.Register)
-	if err := l.svcCtx.Redis.HsetCtx(l.ctx, key, redisValueUsedFieldName, "1"); err != nil {
-		logx.Errorf("标记验证码已使用失败, email=%s, key=%s, err=%v", email, key, err)
-	}
-}
+// // 标记验证码为已使用
+// func (l *RegisterLogic) markCodeAsUsed(email string) {
+// 	key := buildVerifyKey(email, l.svcCtx.Config.VerifyCodeConfig.Type.Register)
+// 	if err := l.svcCtx.Redis.HsetCtx(l.ctx, key, redisValueUsedFieldName, "1"); err != nil {
+// 		logx.Errorf("标记验证码已使用失败, email=%s, key=%s, err=%v", email, key, err)
+// 	}
+// }

@@ -5,7 +5,7 @@ microservice frame of user function: 用户微服务框架
 
 ## 更新计划
 
-1. 登录功能
+1. 错误处理: 需要对user.go主执行文件的http.Ok改为错误码范围case判断，返回真实http错误码而非200
 
 ## 核心模块
 
