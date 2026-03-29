@@ -142,7 +142,8 @@ jobs:
         ./internal/utils/... \
         ./internal/logic/... \
         ./internal/errs/... \
-        ./internal/mqs/...
+        ./internal/mqs/... \
+        ./internal/mock/...
 
     - name: Run all build
       run: |
