@@ -33,6 +33,22 @@ func (l *SendEmail) sendVerifyCodeEmail(msg *types.VerificationCodeMessage) erro
 	)
 }
 
+// 发送重置密码用验证码邮件
+func (l *SendEmail) sendResetPasswordEmail(msg *types.VerificationCodeMessage) error {
+	// 计算分钟，至少显示1分钟
+	expireMinutes := l.svcCtx.Config.VerifyCodeConfig.Time.ExpireIn / 60
+	if expireMinutes < 1 {
+		expireMinutes = 1
+	}
+
+	return l.sendPlainTextMail(
+		l.svcCtx.Config.SmtpConfig.From,
+		msg.Receiver,
+		"您的重置密码验证码",
+		fmt.Sprintf("您的验证码是: %s, %d分钟内有效", msg.Code, expireMinutes),
+	)
+}
+
 // 统一的邮件发送方法
 func (l *SendEmail) sendPlainTextMail(from, receiver, subject, body string) error {
 	// 创建邮件消息
