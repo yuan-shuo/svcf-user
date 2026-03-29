@@ -29,7 +29,7 @@ func (l *SendEmail) sendVerifyCodeEmail(msg *types.VerificationCodeMessage) erro
 		l.svcCtx.Config.SmtpConfig.From,
 		msg.Receiver,
 		"您的注册验证码",
-		fmt.Sprintf("您的验证码是: %s, %d分钟内有效", msg.Code, expireMinutes),
+		fmt.Sprintf("[注册] 您的验证码是: %s, %d分钟内有效", msg.Code, expireMinutes),
 	)
 }
 
@@ -45,7 +45,7 @@ func (l *SendEmail) sendResetPasswordEmail(msg *types.VerificationCodeMessage) e
 		l.svcCtx.Config.SmtpConfig.From,
 		msg.Receiver,
 		"您的重置密码验证码",
-		fmt.Sprintf("您的验证码是: %s, %d分钟内有效", msg.Code, expireMinutes),
+		fmt.Sprintf("[重置密码] 您的验证码是: %s, %d分钟内有效", msg.Code, expireMinutes),
 	)
 }
 

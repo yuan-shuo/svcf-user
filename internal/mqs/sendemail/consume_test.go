@@ -249,6 +249,40 @@ func TestSendEmail_Consume_ReminderRegistered(t *testing.T) {
 	assert.Contains(t, err.Error(), "设置发件人失败")
 }
 
+func TestSendEmail_Consume_ResetPassword(t *testing.T) {
+	ctx := context.Background()
+	svcCtx := &svc.ServiceContext{
+		Config: config.Config{
+			SmtpConfig: config.SmtpConfig{
+				Host: "",
+				Port: 0,
+				From: "",
+			},
+			VerifyCodeConfig: config.VerifyCodeConfig{
+				Type: config.VerifyCodeType{
+					Register:      "register",
+					ResetPassword: "reset_password",
+				},
+			},
+		},
+	}
+	s := NewSendEmail(ctx, svcCtx)
+
+	msg := types.VerificationCodeMessage{
+		Code:      "654321",
+		Receiver:  "test@example.com",
+		Type:      "reset_password",
+		Timestamp: 1234567890,
+	}
+	data, _ := json.Marshal(msg)
+
+	err := s.Consume(ctx, "test-key", string(data))
+
+	// 由于缺少SMTP配置，会返回错误
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "设置发件人失败")
+}
+
 func TestSendEmail_Consume_UnknownType(t *testing.T) {
 	ctx := context.Background()
 	svcCtx := &svc.ServiceContext{
