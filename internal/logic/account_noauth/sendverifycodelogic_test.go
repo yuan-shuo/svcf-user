@@ -47,10 +47,11 @@ func newTestSendVerifyCodeLogic(t *testing.T, r *redis.Redis, mockUsers model.Us
 		Config: config.Config{
 			VerifyCodeConfig: config.VerifyCodeConfig{
 				Type: config.VerifyCodeType{
-					Register:         "register",
-					ResetPassword:    "reset_password",
-					RemindRegistered: "remind_registered",
-				},
+				Register:         "register",
+				ResetPassword:    "reset_password",
+				ChangePassword:   "change_password",
+				RemindRegistered: "remind_registered",
+			},
 				Time: config.VerifyCodeTime{
 					ExpireIn:   300,
 					RetryAfter: 60,
