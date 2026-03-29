@@ -1,7 +1,8 @@
-package account_noauth
+package accutil
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -106,7 +107,7 @@ func TestCommonBuildVerifyKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildVerifyKey(tt.email, tt.codeType)
+			got := BuildVerifyKey(tt.email, tt.codeType)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -159,7 +160,7 @@ func TestCommonBuildLimitKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildLimitKey(tt.email, tt.codeType)
+			got := BuildLimitKey(tt.email, tt.codeType)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -167,11 +168,11 @@ func TestCommonBuildLimitKey(t *testing.T) {
 
 func TestRedisKeyConstants(t *testing.T) {
 	t.Run("验证常量值", func(t *testing.T) {
-		assert.Equal(t, "verify", verifyKey)
-		assert.Equal(t, "limit", limitKey)
-		assert.Equal(t, "code", redisValueCodeFieldName)
-		assert.Equal(t, "used", redisValueUsedFieldName)
-		assert.Equal(t, "account", redisKeyPrefix)
+		assert.Equal(t, "verify", VerifyKey)
+		assert.Equal(t, "limit", LimitKey)
+		assert.Equal(t, "code", RedisValueCodeFieldName)
+		assert.Equal(t, "used", RedisValueUsedFieldName)
+		assert.Equal(t, "account", RedisKeyPrefix)
 	})
 }
 
@@ -182,25 +183,30 @@ func TestKeyConsistency(t *testing.T) {
 
 		// 验证基础key被正确使用
 		baseKey := buildBaseKey(codeType)
-		verifyKey := buildVerifyKey(email, codeType)
-		limitKey := buildLimitKey(email, codeType)
+		VerifyKey := BuildVerifyKey(email, codeType)
+		LimitKey := BuildLimitKey(email, codeType)
 
-		// verifyKey 应该以 baseKey 开头
-		assert.Contains(t, verifyKey, baseKey)
-		// limitKey 应该以 baseKey 开头
-		assert.Contains(t, limitKey, baseKey)
+		// VerifyKey 应该以 baseKey 开头
+		assert.Contains(t, VerifyKey, baseKey)
+		// LimitKey 应该以 baseKey 开头
+		assert.Contains(t, LimitKey, baseKey)
 
 		// 验证结构一致性
-		assert.Equal(t, baseKey+":"+verifyKeyConst+":"+email, verifyKey)
-		assert.Equal(t, baseKey+":"+limitKeyConst+":"+email, limitKey)
+		assert.Equal(t, baseKey+":"+VerifyKeyConst+":"+email, VerifyKey)
+		assert.Equal(t, baseKey+":"+LimitKeyConst+":"+email, LimitKey)
 	})
 }
 
 // 在测试中使用局部常量，避免与包级常量冲突
 const (
-	verifyKeyConst = "verify"
-	limitKeyConst  = "limit"
+	VerifyKeyConst = "verify"
+	LimitKeyConst  = "limit"
 )
+
+// MockUsersModel 模拟 UsersModel
+type MockUsersModel struct {
+	mock.Mock
+}
 
 // setupCommonTest 设置通用测试环境
 func setupCommonTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUsersModel, *svc.ServiceContext) {
@@ -237,6 +243,45 @@ func setupCommonTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *MockUse
 	return s, rds, mockUsersModel, svcCtx
 }
 
+func (m *MockUsersModel) Insert(ctx context.Context, data *model.Users) (sql.Result, error) {
+	args := m.Called(ctx, data)
+	return args.Get(0).(sql.Result), args.Error(1)
+}
+
+func (m *MockUsersModel) FindOne(ctx context.Context, id int64) (*model.Users, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Users), args.Error(1)
+}
+
+func (m *MockUsersModel) FindOneByEmail(ctx context.Context, email string) (*model.Users, error) {
+	args := m.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Users), args.Error(1)
+}
+
+func (m *MockUsersModel) FindOneBySnowflakeId(ctx context.Context, snowflakeId int64) (*model.Users, error) {
+	args := m.Called(ctx, snowflakeId)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Users), args.Error(1)
+}
+
+func (m *MockUsersModel) Update(ctx context.Context, data *model.Users) error {
+	args := m.Called(ctx, data)
+	return args.Error(0)
+}
+
+func (m *MockUsersModel) Delete(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func TestVerifyEmailAndCodeInRedis_Success(t *testing.T) {
 	s, _, _, svcCtx := setupCommonTest(t)
 	defer s.Close()
@@ -252,7 +297,7 @@ func TestVerifyEmailAndCodeInRedis_Success(t *testing.T) {
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
 
-	err := verifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
+	err := VerifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
 
 	assert.NoError(t, err)
 }
@@ -272,7 +317,7 @@ func TestVerifyEmailAndCodeInRedis_InvalidCode(t *testing.T) {
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
 
-	err := verifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
+	err := VerifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
 
 	assert.Error(t, err)
 	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码错误")
@@ -289,10 +334,21 @@ func TestVerifyEmailAndCodeInRedis_CodeNotFound(t *testing.T) {
 
 	// redis 中没有验证码
 
-	err := verifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
+	err := VerifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
 
 	assert.Error(t, err)
 	assert.True(t, isCodeError(err, errs.CodeInvalidCode), "应该是验证码无效错误")
+}
+
+// isCodeError 检查错误是否为指定的错误码
+func isCodeError(err error, code int) bool {
+	if err == nil {
+		return false
+	}
+	if e, ok := errs.IsCodeError(err); ok {
+		return e.Code == code
+	}
+	return false
 }
 
 func TestVerifyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
@@ -310,7 +366,7 @@ func TestVerifyEmailAndCodeInRedis_CodeAlreadyUsed(t *testing.T) {
 	s.HSet(key, "used", "1")
 	s.SetTTL(key, 5*time.Minute)
 
-	err := verifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
+	err := VerifyEmailAndCodeInRedis(ctx, svcCtx, email, code, codeType)
 
 	assert.Error(t, err)
 	assert.True(t, isCodeError(err, errs.CodeCodeAlreadyUsed), "应该是验证码已使用错误")
@@ -331,7 +387,7 @@ func TestMarkCodeAsUsed_Success(t *testing.T) {
 	s.SetTTL(key, 5*time.Minute)
 
 	// 标记为已使用
-	markCodeAsUsed(ctx, svcCtx, email, codeType)
+	MarkCodeAsUsed(ctx, svcCtx, email, codeType)
 
 	// 验证验证码被标记为已使用
 	used := s.HGet(key, "used")
@@ -347,7 +403,7 @@ func TestMarkCodeAsUsed_KeyNotExist(t *testing.T) {
 	codeType := "register"
 
 	// redis 中没有验证码，标记为已使用不应该报错
-	markCodeAsUsed(ctx, svcCtx, email, codeType)
+	MarkCodeAsUsed(ctx, svcCtx, email, codeType)
 
 	// 不应该 panic 或报错
 	assert.True(t, true)
@@ -357,7 +413,7 @@ func TestHashPassword_Success(t *testing.T) {
 	email := "test@example.com"
 	password := "password123"
 
-	hashed, err := hashPassword(email, password)
+	hashed, err := HashPassword(email, password)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, hashed)
@@ -368,7 +424,7 @@ func TestHashPassword_EmptyPassword(t *testing.T) {
 	email := "test@example.com"
 	password := ""
 
-	hashed, err := hashPassword(email, password)
+	hashed, err := HashPassword(email, password)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, hashed) // 空密码也应该能生成哈希
@@ -394,7 +450,7 @@ func TestResetUserPassword_Success(t *testing.T) {
 		return u.PasswordHash == newPassword
 	})).Return(nil)
 
-	err := resetUserPassword(ctx, svcCtx, email, newPassword)
+	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
 
 	assert.NoError(t, err)
 	mockUsersModel.AssertExpectations(t)
@@ -410,7 +466,7 @@ func TestResetUserPassword_UserNotFound(t *testing.T) {
 	// 设置 mock 期望 - 用户不存在
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
 
-	err := resetUserPassword(ctx, svcCtx, email, newPassword)
+	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
 
 	assert.Error(t, err)
 	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
@@ -427,7 +483,7 @@ func TestResetUserPassword_FindUserError(t *testing.T) {
 	// 设置 mock 期望 - 数据库查询错误
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, errors.New("database connection failed"))
 
-	err := resetUserPassword(ctx, svcCtx, email, newPassword)
+	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
 
 	assert.Error(t, err)
 	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
@@ -452,7 +508,7 @@ func TestResetUserPassword_UpdateFailed(t *testing.T) {
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
 	mockUsersModel.On("Update", ctx, mock.AnythingOfType("*model.Users")).Return(errors.New("update failed"))
 
-	err := resetUserPassword(ctx, svcCtx, email, newPassword)
+	err := ResetUserPassword(ctx, svcCtx, email, newPassword)
 
 	assert.Error(t, err)
 	assert.True(t, isCodeError(err, errs.CodeInternalError), "应该是内部错误")
@@ -477,7 +533,7 @@ func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
 	// 注意：由于密码相同，不会调用 Update
 
-	err := resetUserPassword(ctx, svcCtx, email, oldPassword)
+	err := ResetUserPassword(ctx, svcCtx, email, oldPassword)
 
 	assert.Error(t, err)
 	assert.True(t, isCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")

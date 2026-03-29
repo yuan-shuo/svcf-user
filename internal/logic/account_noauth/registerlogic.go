@@ -8,6 +8,7 @@ import (
 	"database/sql"
 
 	"user/internal/errs"
+	"user/internal/logic/accutil"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -41,7 +42,7 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	// }
 
 	// 检查验证码是否属于对应邮箱以及是否正确
-	if err := verifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
+	if err := accutil.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
 		return nil, err
 	}
 
@@ -51,7 +52,7 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	}
 
 	// 密码加密
-	hashedPassword, err := hashPassword(req.Email, req.Password)
+	hashedPassword, err := accutil.HashPassword(req.Email, req.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	}
 
 	// 标记验证码已被使用
-	markCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
+	accutil.MarkCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
 
 	return
 }

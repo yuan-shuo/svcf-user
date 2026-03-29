@@ -14,6 +14,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"user/internal/config"
+	"user/internal/logic/accutil"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -264,7 +265,7 @@ func TestSendVerifyCodeLogic_checkRateLimit(t *testing.T) {
 	})
 
 	t.Run("检查通过后设置限流key", func(t *testing.T) {
-		limitKey := buildLimitKey(email, codeType)
+		limitKey := accutil.BuildLimitKey(email, codeType)
 
 		// 验证key已设置
 		exists, _ := logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
@@ -272,7 +273,7 @@ func TestSendVerifyCodeLogic_checkRateLimit(t *testing.T) {
 	})
 
 	t.Run("限流key有过期时间", func(t *testing.T) {
-		limitKey := buildLimitKey(email, codeType)
+		limitKey := accutil.BuildLimitKey(email, codeType)
 
 		// 验证有过期时间
 		ttl := s.TTL(limitKey)
@@ -560,13 +561,13 @@ func TestSendVerifyCodeLogic_generateAndSaveCode(t *testing.T) {
 		assert.Equal(t, 6, len(code), "验证码长度应该为6位")
 
 		// 验证验证码已保存到Redis
-		redisKey := buildVerifyKey(req.Email, req.Type)
-		savedCode, err := logic.svcCtx.Redis.HgetCtx(ctx, redisKey, redisValueCodeFieldName)
+		redisKey := accutil.BuildVerifyKey(req.Email, req.Type)
+		savedCode, err := logic.svcCtx.Redis.HgetCtx(ctx, redisKey, accutil.RedisValueCodeFieldName)
 		require.NoError(t, err)
 		assert.Equal(t, code, savedCode)
 
 		// 验证used字段
-		savedUsed, err := logic.svcCtx.Redis.HgetCtx(ctx, redisKey, redisValueUsedFieldName)
+		savedUsed, err := logic.svcCtx.Redis.HgetCtx(ctx, redisKey, accutil.RedisValueUsedFieldName)
 		require.NoError(t, err)
 		assert.Equal(t, "0", savedUsed)
 	})
@@ -580,7 +581,7 @@ func TestSendVerifyCodeLogic_generateAndSaveCode(t *testing.T) {
 		require.NotEmpty(t, code)
 
 		// 验证有过期时间
-		redisKey := buildVerifyKey(req.Email, req.Type)
+		redisKey := accutil.BuildVerifyKey(req.Email, req.Type)
 		ttl := s.TTL(redisKey)
 		assert.True(t, ttl > 0, "验证码应该设置过期时间")
 		assert.True(t, ttl <= 300*time.Second, "过期时间应该不超过配置的300秒")
@@ -602,11 +603,11 @@ func TestSendVerifyCodeLogic_generateAndSaveCode(t *testing.T) {
 		require.NotEqual(t, code1, code2, "不同邮箱的验证码应该不同")
 
 		// 验证各自的验证码正确
-		redisKey1 := buildVerifyKey(req1.Email, req1.Type)
-		redisKey2 := buildVerifyKey(req2.Email, req2.Type)
+		redisKey1 := accutil.BuildVerifyKey(req1.Email, req1.Type)
+		redisKey2 := accutil.BuildVerifyKey(req2.Email, req2.Type)
 
-		savedCode1, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey1, redisValueCodeFieldName)
-		savedCode2, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey2, redisValueCodeFieldName)
+		savedCode1, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey1, accutil.RedisValueCodeFieldName)
+		savedCode2, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey2, accutil.RedisValueCodeFieldName)
 
 		assert.Equal(t, code1, savedCode1)
 		assert.Equal(t, code2, savedCode2)
@@ -627,11 +628,11 @@ func TestSendVerifyCodeLogic_generateAndSaveCode(t *testing.T) {
 		code2 := logic.generateAndSaveCode(req2)
 
 		// 验证各自的验证码正确
-		redisKey1 := buildVerifyKey(req1.Email, req1.Type)
-		redisKey2 := buildVerifyKey(req2.Email, req2.Type)
+		redisKey1 := accutil.BuildVerifyKey(req1.Email, req1.Type)
+		redisKey2 := accutil.BuildVerifyKey(req2.Email, req2.Type)
 
-		savedCode1, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey1, redisValueCodeFieldName)
-		savedCode2, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey2, redisValueCodeFieldName)
+		savedCode1, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey1, accutil.RedisValueCodeFieldName)
+		savedCode2, _ := logic.svcCtx.Redis.HgetCtx(ctx, redisKey2, accutil.RedisValueCodeFieldName)
 
 		assert.Equal(t, code1, savedCode1)
 		assert.Equal(t, code2, savedCode2)
@@ -701,7 +702,7 @@ func TestSendVerifyCodeLogic_cleanupRateLimit(t *testing.T) {
 
 	t.Run("成功删除存在的限流数据", func(t *testing.T) {
 		// 先设置一个限流数据
-		limitKey := buildLimitKey(email, codeType)
+		limitKey := accutil.BuildLimitKey(email, codeType)
 		err := logic.svcCtx.Redis.SetCtx(ctx, limitKey, "1")
 		require.NoError(t, err)
 
@@ -722,7 +723,7 @@ func TestSendVerifyCodeLogic_cleanupRateLimit(t *testing.T) {
 	t.Run("删除不存在的key不报错", func(t *testing.T) {
 		// 确保key不存在
 		nonExistentEmail := "nonexistent@example.com"
-		limitKey := buildLimitKey(nonExistentEmail, codeType)
+		limitKey := accutil.BuildLimitKey(nonExistentEmail, codeType)
 
 		exists, err := logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
 		require.NoError(t, err)
@@ -748,10 +749,10 @@ func TestSendVerifyCodeLogic_cleanupVerifyCode(t *testing.T) {
 
 	t.Run("成功删除存在的验证码数据", func(t *testing.T) {
 		// 先设置一个验证码数据
-		verifyKey := buildVerifyKey(email, codeType)
-		err := logic.svcCtx.Redis.HsetCtx(ctx, verifyKey, redisValueCodeFieldName, "123456")
+		verifyKey := accutil.BuildVerifyKey(email, codeType)
+		err := logic.svcCtx.Redis.HsetCtx(ctx, verifyKey, accutil.RedisValueCodeFieldName, "123456")
 		require.NoError(t, err)
-		err = logic.svcCtx.Redis.HsetCtx(ctx, verifyKey, redisValueUsedFieldName, "0")
+		err = logic.svcCtx.Redis.HsetCtx(ctx, verifyKey, accutil.RedisValueUsedFieldName, "0")
 		require.NoError(t, err)
 
 		// 验证数据存在
@@ -771,7 +772,7 @@ func TestSendVerifyCodeLogic_cleanupVerifyCode(t *testing.T) {
 	t.Run("删除不存在的key不报错", func(t *testing.T) {
 		// 确保key不存在
 		nonExistentEmail := "nonexistent@example.com"
-		verifyKey := buildVerifyKey(nonExistentEmail, codeType)
+		verifyKey := accutil.BuildVerifyKey(nonExistentEmail, codeType)
 
 		exists, err := logic.svcCtx.Redis.ExistsCtx(ctx, verifyKey)
 		require.NoError(t, err)
@@ -797,12 +798,12 @@ func TestSendVerifyCodeLogic_cleanupAll(t *testing.T) {
 
 	t.Run("成功清理所有相关数据", func(t *testing.T) {
 		// 先设置限流和验证码数据
-		limitKey := buildLimitKey(email, codeType)
-		verifyKey := buildVerifyKey(email, codeType)
+		limitKey := accutil.BuildLimitKey(email, codeType)
+		verifyKey := accutil.BuildVerifyKey(email, codeType)
 
 		err := logic.svcCtx.Redis.SetCtx(ctx, limitKey, "1")
 		require.NoError(t, err)
-		err = logic.svcCtx.Redis.HsetCtx(ctx, verifyKey, redisValueCodeFieldName, "123456")
+		err = logic.svcCtx.Redis.HsetCtx(ctx, verifyKey, accutil.RedisValueCodeFieldName, "123456")
 		require.NoError(t, err)
 
 		// 验证数据存在
@@ -848,8 +849,8 @@ func TestSendVerifyCodeLogic_SendVerifyCode(t *testing.T) {
 
 		// 验证验证码已保存
 		ctx := context.Background()
-		verifyKey := buildVerifyKey(req.Email, req.Type)
-		code, err := logic.svcCtx.Redis.HgetCtx(ctx, verifyKey, redisValueCodeFieldName)
+		verifyKey := accutil.BuildVerifyKey(req.Email, req.Type)
+		code, err := logic.svcCtx.Redis.HgetCtx(ctx, verifyKey, accutil.RedisValueCodeFieldName)
 		require.NoError(t, err)
 		assert.NotEmpty(t, code)
 	})
@@ -972,8 +973,8 @@ func TestSendVerifyCodeLogic_SendVerifyCode(t *testing.T) {
 
 		// 验证资源已被清理
 		ctx := context.Background()
-		limitKey := buildLimitKey(req.Email, req.Type)
-		verifyKey := buildVerifyKey(req.Email, req.Type)
+		limitKey := accutil.BuildLimitKey(req.Email, req.Type)
+		verifyKey := accutil.BuildVerifyKey(req.Email, req.Type)
 
 		limitExists, _ := logic.svcCtx.Redis.ExistsCtx(ctx, limitKey)
 		verifyExists, _ := logic.svcCtx.Redis.ExistsCtx(ctx, verifyKey)

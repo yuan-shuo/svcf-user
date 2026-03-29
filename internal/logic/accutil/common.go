@@ -1,4 +1,4 @@
-package account_noauth
+package accutil
 
 import (
 	"context"
@@ -12,31 +12,31 @@ import (
 )
 
 const (
-	verifyKey               string = "verify"  // 包级验证redis键词缀
-	limitKey                string = "limit"   // 包级限流redis键词缀
-	redisValueCodeFieldName string = "code"    // redis hash 验证码值的键名
-	redisValueUsedFieldName string = "used"    // redis hash 是否使用过值的键名 "0": 未使用过
-	redisKeyPrefix          string = "account" // redis 键名前缀
+	VerifyKey               string = "verify"  // 包级验证redis键词缀
+	LimitKey                string = "limit"   // 包级限流redis键词缀
+	RedisValueCodeFieldName string = "code"    // redis hash 验证码值的键名
+	RedisValueUsedFieldName string = "used"    // redis hash 是否使用过值的键名 "0": 未使用过
+	RedisKeyPrefix          string = "account" // redis 键名前缀
 )
 
 func buildBaseKey(codeType string) string {
 	return fmt.Sprintf("%s:%s",
-		redisKeyPrefix,
+		RedisKeyPrefix,
 		codeType,
 	)
 }
 
-func buildVerifyKey(email string, codeType string) string {
-	return fmt.Sprintf("%s:%s:%s", buildBaseKey(codeType), verifyKey, email)
+func BuildVerifyKey(email string, codeType string) string {
+	return fmt.Sprintf("%s:%s:%s", buildBaseKey(codeType), VerifyKey, email)
 }
 
-func buildLimitKey(email string, codeType string) string {
-	return fmt.Sprintf("%s:%s:%s", buildBaseKey(codeType), limitKey, email)
+func BuildLimitKey(email string, codeType string) string {
+	return fmt.Sprintf("%s:%s:%s", buildBaseKey(codeType), LimitKey, email)
 }
 
 // 检查验证码是否属于对应邮箱以及是否正确
-func verifyEmailAndCodeInRedis(ctx context.Context, svcCtx *svc.ServiceContext, email string, code string, codeType string) error {
-	key := buildVerifyKey(email, codeType)
+func VerifyEmailAndCodeInRedis(ctx context.Context, svcCtx *svc.ServiceContext, email string, code string, codeType string) error {
+	key := BuildVerifyKey(email, codeType)
 
 	// 一次获取所有字段（Hgetall）
 	fields, err := svcCtx.Redis.HgetallCtx(ctx, key)
@@ -46,17 +46,17 @@ func verifyEmailAndCodeInRedis(ctx context.Context, svcCtx *svc.ServiceContext, 
 	}
 
 	// 键不存在或没有 code 字段
-	if len(fields) == 0 || fields[redisValueCodeFieldName] == "" {
+	if len(fields) == 0 || fields[RedisValueCodeFieldName] == "" {
 		return errs.New(errs.CodeInvalidCode)
 	}
 
 	// 检查是否已使用
-	if fields[redisValueUsedFieldName] != "0" {
+	if fields[RedisValueUsedFieldName] != "0" {
 		return errs.New(errs.CodeCodeAlreadyUsed)
 	}
 
 	// 比对验证码
-	if !strings.EqualFold(fields[redisValueCodeFieldName], code) {
+	if !strings.EqualFold(fields[RedisValueCodeFieldName], code) {
 		return errs.New(errs.CodeInvalidCode)
 	}
 
@@ -64,15 +64,15 @@ func verifyEmailAndCodeInRedis(ctx context.Context, svcCtx *svc.ServiceContext, 
 }
 
 // 标记验证码为已使用
-func markCodeAsUsed(ctx context.Context, svcCtx *svc.ServiceContext, email string, codeType string) {
-	key := buildVerifyKey(email, codeType)
-	if err := svcCtx.Redis.HsetCtx(ctx, key, redisValueUsedFieldName, "1"); err != nil {
+func MarkCodeAsUsed(ctx context.Context, svcCtx *svc.ServiceContext, email string, codeType string) {
+	key := BuildVerifyKey(email, codeType)
+	if err := svcCtx.Redis.HsetCtx(ctx, key, RedisValueUsedFieldName, "1"); err != nil {
 		logx.Errorf("标记验证码已使用失败, email=%s, key=%s, err=%v", email, key, err)
 	}
 }
 
 // 密码加密
-func hashPassword(email, password string) (string, error) {
+func HashPassword(email, password string) (string, error) {
 	hashedPassword, err := utils.HashPassword(password)
 	if err != nil {
 		// 记录详细错误日志
@@ -84,7 +84,7 @@ func hashPassword(email, password string) (string, error) {
 }
 
 // 重置用户密码
-func resetUserPassword(ctx context.Context, svcCtx *svc.ServiceContext, email, newPassword string) error {
+func ResetUserPassword(ctx context.Context, svcCtx *svc.ServiceContext, email, newPassword string) error {
 	// 获取用户
 	user, err := svcCtx.UsersModel.FindOneByEmail(ctx, email)
 	if err != nil {
