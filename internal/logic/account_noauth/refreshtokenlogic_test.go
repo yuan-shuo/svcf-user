@@ -2,7 +2,6 @@ package account_noauth
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"user/internal/config"
@@ -13,9 +12,7 @@ import (
 	"user/internal/types"
 	"user/internal/utils"
 
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/assert"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
@@ -121,17 +118,9 @@ func TestRefreshTokenLogic_RefreshToken_WrongSecret(t *testing.T) {
 func TestRefreshTokenLogic_RefreshToken_ExpiredToken(t *testing.T) {
 	ctx := context.Background()
 
-	// 生成已过期的 token
+	// 生成已过期的 token（使用负的过期时间）
 	refreshSecret := "test-refresh-secret"
-	now := jwt.TimeFunc()
-	claims := jwt.MapClaims{
-		"uid":    int64(12345),
-		"type":   "refresh",
-		"iat":    now.Add(-2 * 3600).Unix(), // 2小时前签发
-		"exp":    now.Add(-3600).Unix(),     // 1小时前过期
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	expiredToken, err := token.SignedString([]byte(refreshSecret))
+	expiredToken, err := utils.GenerateRefreshToken(refreshSecret, -1, 12345)
 	assert.NoError(t, err)
 
 	svcCtx := &svc.ServiceContext{
@@ -149,6 +138,7 @@ func TestRefreshTokenLogic_RefreshToken_ExpiredToken(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken))
 }
 
 func TestRefreshTokenLogic_RefreshToken_NotRefreshTokenType(t *testing.T) {
@@ -217,7 +207,7 @@ func TestRefreshTokenLogic_RefreshToken_UserNotFound(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestRefreshTokenLogic_RefreshToken_DatabaseError(t *testing.T) {
+func TestRefreshTokenLogic_RefreshToken_DBError(t *testing.T) {
 	ctx := context.Background()
 	mockUsersModel := new(mock.UsersModel)
 
@@ -230,7 +220,7 @@ func TestRefreshTokenLogic_RefreshToken_DatabaseError(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 设置 mock 期望：数据库错误
-	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(nil, errors.New("database error"))
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(nil, assert.AnError)
 
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
@@ -243,9 +233,6 @@ func TestRefreshTokenLogic_RefreshToken_DatabaseError(t *testing.T) {
 			RefreshExpire: refreshExpire,
 		},
 	}
-
-	// 禁用日志输出
-	logx.Disable()
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
 	req := &types.RefreshTokenReq{

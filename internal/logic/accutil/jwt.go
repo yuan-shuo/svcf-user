@@ -37,12 +37,12 @@ func GetUserByRefreshToken(ctx context.Context, svcCtx *svc.ServiceContext, rtBa
 	rt, err := utils.ParseRefreshToken(rtBase64, svcCtx.Config.RefreshSecret)
 	if err != nil {
 		logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
-		return nil, errs.New(errs.CodeInternalError)
+		return nil, errs.New(errs.CodeInvalidToken)
 	}
 	uid, err := rt.GetUID()
 	if err != nil {
 		logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
-		return nil, errs.New(errs.CodeInternalError)
+		return nil, errs.New(errs.CodeInvalidToken)
 	}
 	return GetUserByUid(ctx, svcCtx, uid)
 }

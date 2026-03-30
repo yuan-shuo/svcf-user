@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -54,13 +55,43 @@ func setupChangePasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, 
 	return s, rds, mockUsersModel, svcCtx
 }
 
+// createTestContextWithAccessToken 创建包含 AccessToken claims 的 context
+func createTestContextWithAccessToken(uid int64, email string) context.Context {
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    email,
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number(string(rune(uid))),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	// 使用字符串形式的 uid
+	claims.Uid = json.Number(string(rune(uid)))
+	// 重新设置正确的 uid
+	claims.Uid = json.Number("12345")
+	return context.WithValue(context.Background(), "claims", claims)
+}
+
 func TestChangePasswordLogic_ChangePassword_Success(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	// 准备 JWT 上下文
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	// 准备 JWT 上下文 - 使用新的结构体格式
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    "test@example.com",
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number("12345"),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	ctx := context.WithValue(context.Background(), "claims", claims)
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -113,8 +144,19 @@ func TestChangePasswordLogic_ChangePassword_InvalidCode(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	// 使用新的结构体格式
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    "test@example.com",
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number("12345"),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	ctx := context.WithValue(context.Background(), "claims", claims)
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -150,8 +192,19 @@ func TestChangePasswordLogic_ChangePassword_CodeAlreadyUsed(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	// 使用新的结构体格式
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    "test@example.com",
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number("12345"),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	ctx := context.WithValue(context.Background(), "claims", claims)
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -186,8 +239,19 @@ func TestChangePasswordLogic_ChangePassword_CodeNotFound(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	// 使用新的结构体格式
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    "test@example.com",
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number("12345"),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	ctx := context.WithValue(context.Background(), "claims", claims)
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -217,8 +281,19 @@ func TestChangePasswordLogic_ChangePassword_UserNotFound(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	// 使用新的结构体格式
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    "test@example.com",
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number("12345"),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	ctx := context.WithValue(context.Background(), "claims", claims)
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -256,8 +331,19 @@ func TestChangePasswordLogic_ChangePassword_OldPasswordIncorrect(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	// 使用新的结构体格式
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    "test@example.com",
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number("12345"),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	ctx := context.WithValue(context.Background(), "claims", claims)
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -306,8 +392,19 @@ func TestChangePasswordLogic_ChangePassword_SameAsOldPassword(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	// 使用新的结构体格式
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    "test@example.com",
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number("12345"),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	ctx := context.WithValue(context.Background(), "claims", claims)
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -354,8 +451,19 @@ func TestChangePasswordLogic_ChangePassword_UpdateFailed(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	// 使用新的结构体格式
+	claims := &utils.AccessToken{
+		Nickname: "testuser",
+		Email:    "test@example.com",
+		JwtClaims: utils.JwtClaims{
+			Uid:       json.Number("12345"),
+			Version:   "1.0",
+			TokenType: "access",
+			Iat:       time.Now().Unix(),
+			Exp:       time.Now().Add(time.Hour).Unix(),
+		},
+	}
+	ctx := context.WithValue(context.Background(), "claims", claims)
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -404,8 +512,8 @@ func TestChangePasswordLogic_ChangePassword_EmailNotInContext(t *testing.T) {
 	s, _, _, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	// 不设置 email 到上下文
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
+	// 不设置 claims 到上下文
+	ctx := context.Background()
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
