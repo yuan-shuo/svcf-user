@@ -24,6 +24,16 @@ type LoginResp struct {
 	ExpiresIn    int64  `json:"expiresIn"`              // AccessToken 有效期，单位:秒
 }
 
+type RefreshTokenReq struct {
+	RefreshToken string `json:"refreshToken"` // 刷新令牌
+}
+
+type RefreshTokenResp struct {
+	AccessToken  string `json:"accessToken"`  // 短期令牌，单位:秒
+	RefreshToken string `json:"refreshToken"` // 长期令牌，单位:秒
+	ExpiresIn    int64  `json:"expiresIn"`    // AccessToken 有效期，单位:秒
+}
+
 type RegisterReq struct {
 	Email    string `json:"email"`    // 邮箱
 	Password string `json:"password"` // 密码

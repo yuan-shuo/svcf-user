@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -54,13 +55,24 @@ func setupChangePasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, 
 	return s, rds, mockUsersModel, svcCtx
 }
 
+// createTestContextWithAccessToken 创建包含 AccessToken claims 的 context
+// 模拟 go-zero JWT 中间件将 claims 字段存入 context 的行为
+func createTestContextWithAccessToken(uid int64, email string) context.Context {
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", email)
+	return ctx
+}
+
 func TestChangePasswordLogic_ChangePassword_Success(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
 	// 准备 JWT 上下文
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -113,8 +125,7 @@ func TestChangePasswordLogic_ChangePassword_InvalidCode(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -150,8 +161,7 @@ func TestChangePasswordLogic_ChangePassword_CodeAlreadyUsed(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -186,8 +196,7 @@ func TestChangePasswordLogic_ChangePassword_CodeNotFound(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -217,8 +226,7 @@ func TestChangePasswordLogic_ChangePassword_UserNotFound(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -256,8 +264,7 @@ func TestChangePasswordLogic_ChangePassword_OldPasswordIncorrect(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -306,8 +313,7 @@ func TestChangePasswordLogic_ChangePassword_SameAsOldPassword(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -354,8 +360,7 @@ func TestChangePasswordLogic_ChangePassword_UpdateFailed(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
@@ -404,8 +409,8 @@ func TestChangePasswordLogic_ChangePassword_EmailNotInContext(t *testing.T) {
 	s, _, _, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	// 不设置 email 到上下文
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
+	// 不设置 claims 到上下文
+	ctx := context.Background()
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
