@@ -8,6 +8,7 @@ microservice frame of user function: 用户微服务框架
 1. 限流
 1. 可能存在的优化
 1. jwt通用组件
+1. jwt token过期（version变更）
 
 ## 核心模块
 
