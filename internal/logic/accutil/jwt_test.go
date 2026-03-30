@@ -2,6 +2,7 @@ package accutil
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"user/internal/config"
@@ -14,7 +15,6 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zeromicro/go-zero/core/stores/redis"
-	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 // setupJwtTest 设置 JWT 测试环境
@@ -31,6 +31,12 @@ func setupJwtTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.Users
 	// 创建 service context
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
+			Auth: config.Auth{
+				AccessSecret: "test-access-secret",
+				AccessExpire: 3600,
+			},
+			RefreshSecret: "test-refresh-secret",
+			RefreshExpire: 7200,
 			VerifyCodeConfig: config.VerifyCodeConfig{
 				Type: config.VerifyCodeType{
 					Register:      "register",
@@ -52,39 +58,18 @@ func setupJwtTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.Users
 	return s, rds, mockUsersModel, svcCtx
 }
 
-func TestGetEmailByJwtCtx_Success(t *testing.T) {
-	ctx := context.WithValue(context.Background(), "email", "test@example.com")
+// ==================== GetUserByAccessTokenClaims 测试 ====================
 
-	email, err := GetEmailByJwtCtx(ctx)
-
-	assert.NoError(t, err)
-	assert.Equal(t, "test@example.com", email)
-}
-
-func TestGetEmailByJwtCtx_EmailNotFound(t *testing.T) {
-	ctx := context.Background()
-
-	email, err := GetEmailByJwtCtx(ctx)
-
-	assert.Error(t, err)
-	assert.Empty(t, email)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-}
-
-func TestGetEmailByJwtCtx_InvalidType(t *testing.T) {
-	ctx := context.WithValue(context.Background(), "email", 12345)
-
-	email, err := GetEmailByJwtCtx(ctx)
-
-	assert.Error(t, err)
-	assert.Empty(t, email)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-}
-
-func TestGetUserByJwtCtx_Success(t *testing.T) {
+func TestGetUserByAccessTokenClaims_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
+	// 创建包含 AccessToken claims 字段的 context（模拟 go-zero 中间件行为）
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	expectedUser := &model.Users{
 		Id:           1,
@@ -95,7 +80,7 @@ func TestGetUserByJwtCtx_Success(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
 
-	user, err := GetUserByJwtCtx(ctx, svcCtx)
+	user, err := GetUserByAccessTokenClaims(ctx, svcCtx)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
@@ -103,38 +88,31 @@ func TestGetUserByJwtCtx_Success(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestGetUserByJwtCtx_UidNotFound(t *testing.T) {
+func TestGetUserByAccessTokenClaims_ClaimsNotFound(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
 
 	ctx := context.Background()
 
-	user, err := GetUserByJwtCtx(ctx, svcCtx)
+	user, err := GetUserByAccessTokenClaims(ctx, svcCtx)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
 	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 }
 
-func TestGetUserByJwtCtx_InvalidUidType(t *testing.T) {
-	_, _, _, svcCtx := setupJwtTest(t)
-
-	ctx := context.WithValue(context.Background(), "uid", "invalid")
-
-	user, err := GetUserByJwtCtx(ctx, svcCtx)
-
-	assert.Error(t, err)
-	assert.Nil(t, user)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-}
-
-func TestGetUserByJwtCtx_UserNotFound(t *testing.T) {
+func TestGetUserByAccessTokenClaims_UserNotFound(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
-	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, sqlx.ErrNotFound)
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, model.ErrNotFound)
 
-	user, err := GetUserByJwtCtx(ctx, svcCtx)
+	user, err := GetUserByAccessTokenClaims(ctx, svcCtx)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -142,14 +120,19 @@ func TestGetUserByJwtCtx_UserNotFound(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestGetUserByJwtCtx_DatabaseError(t *testing.T) {
+func TestGetUserByAccessTokenClaims_DBError(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	ctx := context.WithValue(context.Background(), "uid", int64(12345))
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, assert.AnError)
 
-	user, err := GetUserByJwtCtx(ctx, svcCtx)
+	user, err := GetUserByAccessTokenClaims(ctx, svcCtx)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -157,38 +140,110 @@ func TestGetUserByJwtCtx_DatabaseError(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestGetUserByUid_Success(t *testing.T) {
+// ==================== GetUserByRefreshTokenClaims 测试 ====================
+
+func TestGetUserByRefreshTokenClaims_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
 	ctx := context.Background()
-	uid := int64(12345)
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "refresh")
 
 	expectedUser := &model.Users{
 		Id:           1,
-		SnowflakeId:  uid,
+		SnowflakeId:  12345,
 		Email:        "test@example.com",
 		Nickname:     "testuser",
 		PasswordHash: "hashedpassword",
 	}
-	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(expectedUser, nil)
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
 
-	user, err := GetUserByUid(ctx, svcCtx, uid)
+	user, err := GetUserByRefreshTokenClaims(ctx, svcCtx)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
-	assert.Equal(t, uid, user.SnowflakeId)
+	assert.Equal(t, int64(12345), user.SnowflakeId)
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestGetUserByUid_NotFound(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
+func TestGetUserByRefreshTokenClaims_ClaimsNotFound(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
 
 	ctx := context.Background()
-	uid := int64(12345)
 
-	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(nil, sqlx.ErrNotFound)
+	user, err := GetUserByRefreshTokenClaims(ctx, svcCtx)
 
-	user, err := GetUserByUid(ctx, svcCtx, uid)
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
+}
+
+// ==================== GetUserByRefreshToken 测试 ====================
+
+func TestGetUserByRefreshToken_Success(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
+
+	// 生成有效的 refresh token
+	rt, err := utils.GenerateRefreshToken(svcCtx.Config.RefreshSecret, svcCtx.Config.RefreshExpire, 12345)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	expectedUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  12345,
+		Email:        "test@example.com",
+		Nickname:     "testuser",
+		PasswordHash: "hashedpassword",
+	}
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
+
+	user, err := GetUserByRefreshToken(ctx, svcCtx, rt)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, int64(12345), user.SnowflakeId)
+	mockUsersModel.AssertExpectations(t)
+}
+
+func TestGetUserByRefreshToken_InvalidToken(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	ctx := context.Background()
+
+	user, err := GetUserByRefreshToken(ctx, svcCtx, "invalid-token")
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken), "应该是令牌无效错误")
+}
+
+func TestGetUserByRefreshToken_WrongSecret(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	// 使用错误的密钥生成 token
+	rt, err := utils.GenerateRefreshToken("wrong-secret", svcCtx.Config.RefreshExpire, 12345)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+
+	user, err := GetUserByRefreshToken(ctx, svcCtx, rt)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken), "应该是令牌无效错误")
+}
+
+func TestGetUserByRefreshToken_UserNotFound(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
+
+	rt, err := utils.GenerateRefreshToken(svcCtx.Config.RefreshSecret, svcCtx.Config.RefreshExpire, 12345)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, model.ErrNotFound)
+
+	user, err := GetUserByRefreshToken(ctx, svcCtx, rt)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -196,18 +251,278 @@ func TestGetUserByUid_NotFound(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestGetUserByUid_DatabaseError(t *testing.T) {
+// ==================== GetAccessTokenClaimsByJWT 测试 ====================
+
+func TestGetAccessTokenClaimsByJWT_Success(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	token, err := utils.GenerateAccessToken(
+		svcCtx.Config.Auth.AccessSecret,
+		svcCtx.Config.Auth.AccessExpire,
+		12345,
+		"testuser",
+		"test@example.com",
+	)
+	assert.NoError(t, err)
+
+	claims, err := GetAccessTokenClaimsByJWT(token, svcCtx.Config.Auth.AccessSecret)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, claims)
+	assert.Equal(t, "test@example.com", claims.Email)
+	assert.Equal(t, "testuser", claims.Nickname)
+	uid, _ := claims.GetUID()
+	assert.Equal(t, int64(12345), uid)
+}
+
+func TestGetAccessTokenClaimsByJWT_InvalidToken(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	claims, err := GetAccessTokenClaimsByJWT("invalid-token", svcCtx.Config.Auth.AccessSecret)
+
+	assert.Error(t, err)
+	assert.Nil(t, claims)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken), "应该是无效token错误")
+}
+
+func TestGetAccessTokenClaimsByJWT_WrongSecret(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	token, _ := utils.GenerateAccessToken(
+		svcCtx.Config.Auth.AccessSecret,
+		svcCtx.Config.Auth.AccessExpire,
+		12345,
+		"testuser",
+		"test@example.com",
+	)
+
+	claims, err := GetAccessTokenClaimsByJWT(token, "wrong-secret")
+
+	assert.Error(t, err)
+	assert.Nil(t, claims)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken), "应该是无效token错误")
+}
+
+func TestGetAccessTokenClaimsByJWT_Expired(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	// 生成已过期的 token
+	token, _ := utils.GenerateAccessToken(
+		svcCtx.Config.Auth.AccessSecret,
+		-1, // 已过期
+		12345,
+		"testuser",
+		"test@example.com",
+	)
+
+	claims, err := GetAccessTokenClaimsByJWT(token, svcCtx.Config.Auth.AccessSecret)
+
+	assert.Error(t, err)
+	assert.Nil(t, claims)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken), "应该是无效token错误")
+}
+
+// ==================== GetRefreshTokenClaimsByJWT 测试 ====================
+
+func TestGetRefreshTokenClaimsByJWT_Success(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	token, err := utils.GenerateRefreshToken(
+		svcCtx.Config.RefreshSecret,
+		svcCtx.Config.RefreshExpire,
+		12345,
+	)
+	assert.NoError(t, err)
+
+	claims, err := GetRefreshTokenClaimsByJWT(token, svcCtx.Config.RefreshSecret)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, claims)
+	uid, _ := claims.GetUID()
+	assert.Equal(t, int64(12345), uid)
+}
+
+func TestGetRefreshTokenClaimsByJWT_InvalidToken(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	claims, err := GetRefreshTokenClaimsByJWT("invalid-token", svcCtx.Config.RefreshSecret)
+
+	assert.Error(t, err)
+	assert.Nil(t, claims)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken), "应该是无效token错误")
+}
+
+func TestGetRefreshTokenClaimsByJWT_WrongTokenType(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	// 使用 access token 尝试解析为 refresh token
+	token, _ := utils.GenerateAccessToken(
+		svcCtx.Config.RefreshSecret, // 注意：这里使用 RefreshSecret
+		svcCtx.Config.RefreshExpire,
+		12345,
+		"testuser",
+		"test@example.com",
+	)
+
+	claims, err := GetRefreshTokenClaimsByJWT(token, svcCtx.Config.RefreshSecret)
+
+	assert.Error(t, err)
+	assert.Nil(t, claims)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken), "应该是无效token错误")
+}
+
+// ==================== GetEmailByJwtCtx 测试 ====================
+
+func TestGetEmailByJwtCtx_Success(t *testing.T) {
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
+
+	email, err := GetEmailByJwtCtx(ctx)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "test@example.com", email)
+}
+
+func TestGetEmailByJwtCtx_ClaimsNotFound(t *testing.T) {
+	ctx := context.Background()
+
+	email, err := GetEmailByJwtCtx(ctx)
+
+	assert.Error(t, err)
+	assert.Empty(t, email)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
+}
+
+// ==================== GenerateAccessToken (wrapper) 测试 ====================
+
+func TestGenerateAccessToken_Wrapper_Success(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	user := &model.Users{
+		Id:           1,
+		SnowflakeId:  12345,
+		Email:        "test@example.com",
+		Nickname:     "testuser",
+		PasswordHash: "hashedpassword",
+	}
+
+	token, err := GenerateAccessToken(svcCtx.Config, user)
+
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token)
+
+	// 验证 token 可以解析
+	claims, err := utils.ParseAccessToken(token, svcCtx.Config.Auth.AccessSecret)
+	assert.NoError(t, err)
+	assert.Equal(t, "test@example.com", claims.Email)
+	assert.Equal(t, "testuser", claims.Nickname)
+}
+
+// ==================== GenerateRefreshToken (wrapper) 测试 ====================
+
+func TestGenerateRefreshToken_Wrapper_Success(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	user := &model.Users{
+		Id:           1,
+		SnowflakeId:  12345,
+		Email:        "test@example.com",
+		Nickname:     "testuser",
+		PasswordHash: "hashedpassword",
+	}
+
+	token, err := GenerateRefreshToken(svcCtx.Config, user)
+
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token)
+
+	// 验证 token 可以解析
+	claims, err := utils.ParseRefreshToken(token, svcCtx.Config.RefreshSecret)
+	assert.NoError(t, err)
+	uid, _ := claims.GetUID()
+	assert.Equal(t, int64(12345), uid)
+}
+
+// ==================== GetUserByAccessJwtCtx 测试 ====================
+
+func TestGetUserByAccessJwtCtx_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
 	ctx := context.Background()
-	uid := int64(12345)
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
-	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(nil, assert.AnError)
+	expectedUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  12345,
+		Email:        "test@example.com",
+		Nickname:     "testuser",
+		PasswordHash: "hashedpassword",
+	}
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
 
-	user, err := GetUserByUid(ctx, svcCtx, uid)
+	user, err := GetUserByAccessJwtCtx(ctx, svcCtx)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, int64(12345), user.SnowflakeId)
+	mockUsersModel.AssertExpectations(t)
+}
+
+func TestGetUserByAccessJwtCtx_ClaimsNotFound(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	ctx := context.Background()
+
+	user, err := GetUserByAccessJwtCtx(ctx, svcCtx)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
 	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
+}
+
+// ==================== GetUserByRefreshJwtCtx 测试 ====================
+
+func TestGetUserByRefreshJwtCtx_Success(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "refresh")
+
+	expectedUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  12345,
+		Email:        "test@example.com",
+		Nickname:     "testuser",
+		PasswordHash: "hashedpassword",
+	}
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
+
+	user, err := GetUserByRefreshJwtCtx(ctx, svcCtx)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, user)
+	assert.Equal(t, int64(12345), user.SnowflakeId)
 	mockUsersModel.AssertExpectations(t)
+}
+
+func TestGetUserByRefreshJwtCtx_ClaimsNotFound(t *testing.T) {
+	_, _, _, svcCtx := setupJwtTest(t)
+
+	ctx := context.Background()
+
+	user, err := GetUserByRefreshJwtCtx(ctx, svcCtx)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 }

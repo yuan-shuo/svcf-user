@@ -280,51 +280,6 @@ func TestLoginLogic_getUserByEmail_DatabaseError(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestLoginLogic_generateAccessToken_Success(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{
-		Config: config.Config{
-			Auth: config.Auth{
-				AccessSecret: "test-access-secret",
-				AccessExpire: 3600,
-			},
-		},
-	}
-
-	logic := NewLoginLogic(ctx, svcCtx)
-	user := &model.Users{
-		SnowflakeId: 12345,
-		Nickname:    "testuser",
-		Email:       "test@example.com",
-	}
-
-	token, err := logic.generateAccessToken(user)
-
-	assert.NoError(t, err)
-	assert.NotEmpty(t, token)
-}
-
-func TestLoginLogic_generateRefreshToken_Success(t *testing.T) {
-	ctx := context.Background()
-	svcCtx := &svc.ServiceContext{
-		Config: config.Config{
-			RefreshSecret: "test-refresh-secret",
-			RefreshExpire: 7200,
-		},
-	}
-
-	logic := NewLoginLogic(ctx, svcCtx)
-	user := &model.Users{
-		SnowflakeId: 12345,
-		Email:       "test@example.com",
-	}
-
-	token, err := logic.generateRefreshToken(user)
-
-	assert.NoError(t, err)
-	assert.NotEmpty(t, token)
-}
-
 func TestLoginLogic_buildLoginResponse(t *testing.T) {
 	ctx := context.Background()
 	svcCtx := &svc.ServiceContext{

@@ -42,7 +42,7 @@ func (l *ChangePasswordLogic) ChangePassword(req *types.ChangePasswordReq) (resp
 	}
 
 	// 先获取用户实例
-	user, err := accutil.GetUserByJwtCtx(l.ctx, l.svcCtx)
+	user, err := accutil.GetUserByAccessJwtCtx(l.ctx, l.svcCtx)
 	if err != nil {
 		return nil, err
 	}
