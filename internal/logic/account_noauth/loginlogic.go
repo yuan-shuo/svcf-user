@@ -12,7 +12,6 @@ import (
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
-	"user/internal/utils"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
@@ -45,7 +44,7 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 	}
 
 	// 3. 签发 accessToken
-	accessToken, err := l.generateAccessToken(user)
+	accessToken, err := accutil.GenerateAccessToken(l.svcCtx.Config, user)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +53,7 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 	var refreshToken string
 	if req.RememberMe {
 		// 仅在用户主动选择 "记住我" 时提供RT
-		refreshToken, err = l.generateRefreshToken(user)
+		refreshToken, err = accutil.GenerateRefreshToken(l.svcCtx.Config, user)
 		if err != nil {
 			return nil, err
 		}
@@ -89,35 +88,35 @@ func (l *LoginLogic) getUserByEmail(email string) (*model.Users, error) {
 // 	return nil
 // }
 
-// 3. 签发 accessToken
-func (l *LoginLogic) generateAccessToken(user *model.Users) (string, error) {
-	accessToken, err := utils.GenerateAccessToken(
-		l.svcCtx.Config.Auth.AccessSecret,
-		l.svcCtx.Config.Auth.AccessExpire,
-		user.SnowflakeId,
-		user.Nickname,
-		user.Email,
-	)
-	if err != nil {
-		logx.Errorf("签发 accessToken 失败, email=%s, err=%v", user.Email, err)
-		return "", errs.New(errs.CodeInternalError)
-	}
-	return accessToken, nil
-}
+// // 3. 签发 accessToken
+// func (l *LoginLogic) generateAccessToken(user *model.Users) (string, error) {
+// 	accessToken, err := utils.GenerateAccessToken(
+// 		l.svcCtx.Config.Auth.AccessSecret,
+// 		l.svcCtx.Config.Auth.AccessExpire,
+// 		user.SnowflakeId,
+// 		user.Nickname,
+// 		user.Email,
+// 	)
+// 	if err != nil {
+// 		logx.Errorf("签发 accessToken 失败, email=%s, err=%v", user.Email, err)
+// 		return "", errs.New(errs.CodeInternalError)
+// 	}
+// 	return accessToken, nil
+// }
 
-// 4. 签发 refreshToken
-func (l *LoginLogic) generateRefreshToken(user *model.Users) (string, error) {
-	refreshToken, err := utils.GenerateRefreshToken(
-		l.svcCtx.Config.RefreshSecret,
-		l.svcCtx.Config.RefreshExpire,
-		user.SnowflakeId,
-	)
-	if err != nil {
-		logx.Errorf("签发 refreshToken 失败, email=%s, err=%v", user.Email, err)
-		return "", errs.New(errs.CodeInternalError)
-	}
-	return refreshToken, nil
-}
+// // 4. 签发 refreshToken
+// func (l *LoginLogic) generateRefreshToken(user *model.Users) (string, error) {
+// 	refreshToken, err := utils.GenerateRefreshToken(
+// 		l.svcCtx.Config.RefreshSecret,
+// 		l.svcCtx.Config.RefreshExpire,
+// 		user.SnowflakeId,
+// 	)
+// 	if err != nil {
+// 		logx.Errorf("签发 refreshToken 失败, email=%s, err=%v", user.Email, err)
+// 		return "", errs.New(errs.CodeInternalError)
+// 	}
+// 	return refreshToken, nil
+// }
 
 // 5. 响应构建模块
 func (l *LoginLogic) buildLoginResponse(accessToken, refreshToken string) *types.LoginResp {

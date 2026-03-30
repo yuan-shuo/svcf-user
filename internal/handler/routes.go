@@ -35,6 +35,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodPost,
+				Path:    "/refreshtoken",
+				Handler: account_noauth.RefreshTokenHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
 				Path:    "/register",
 				Handler: account_noauth.RegisterHandler(serverCtx),
 			},
