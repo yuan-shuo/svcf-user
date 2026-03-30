@@ -279,3 +279,159 @@ func TestGenerateAccessToken_DifferentUsers(t *testing.T) {
 		assert.Equal(t, tc.email, claims["email"])
 	}
 }
+
+// ==================== GetUidFromClaims 测试 ====================
+
+func TestGetUidFromClaims_Success(t *testing.T) {
+	claims := jwt.MapClaims{
+		"uid": float64(12345),
+	}
+
+	uid, err := GetUidFromClaims(claims)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
+}
+
+func TestGetUidFromClaims_Int64(t *testing.T) {
+	claims := jwt.MapClaims{
+		"uid": int64(12345),
+	}
+
+	uid, err := GetUidFromClaims(claims)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
+}
+
+func TestGetUidFromClaims_Int(t *testing.T) {
+	claims := jwt.MapClaims{
+		"uid": int(12345),
+	}
+
+	uid, err := GetUidFromClaims(claims)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
+}
+
+func TestGetUidFromClaims_String(t *testing.T) {
+	claims := jwt.MapClaims{
+		"uid": "12345",
+	}
+
+	uid, err := GetUidFromClaims(claims)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
+}
+
+func TestGetUidFromClaims_JsonNumber(t *testing.T) {
+	claims := jwt.MapClaims{
+		"uid": json.Number("12345"),
+	}
+
+	uid, err := GetUidFromClaims(claims)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(12345), uid)
+}
+
+func TestGetUidFromClaims_NotFound(t *testing.T) {
+	claims := jwt.MapClaims{}
+
+	uid, err := GetUidFromClaims(claims)
+
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), uid)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestGetUidFromClaims_InvalidString(t *testing.T) {
+	claims := jwt.MapClaims{
+		"uid": "not-a-number",
+	}
+
+	uid, err := GetUidFromClaims(claims)
+
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), uid)
+}
+
+func TestGetUidFromClaims_UnsupportedType(t *testing.T) {
+	claims := jwt.MapClaims{
+		"uid": []string{"invalid"},
+	}
+
+	uid, err := GetUidFromClaims(claims)
+
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), uid)
+	assert.Contains(t, err.Error(), "unsupported")
+}
+
+// ==================== IsRefreshToken 测试 ====================
+
+func TestIsRefreshToken_Success(t *testing.T) {
+	claims := jwt.MapClaims{
+		"type": "refresh",
+	}
+
+	err := IsRefreshToken(claims)
+
+	assert.NoError(t, err)
+}
+
+func TestIsRefreshToken_NotRefreshToken(t *testing.T) {
+	claims := jwt.MapClaims{
+		"type": "access",
+	}
+
+	err := IsRefreshToken(claims)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "mismatch")
+}
+
+func TestIsRefreshToken_TypeNotFound(t *testing.T) {
+	claims := jwt.MapClaims{
+		"uid": float64(12345),
+	}
+
+	err := IsRefreshToken(claims)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+// ==================== ValidateClaimString 测试 ====================
+
+func TestValidateClaimString_Success(t *testing.T) {
+	claims := jwt.MapClaims{
+		"type": "refresh",
+	}
+
+	err := ValidateClaimString(claims, "type", "refresh")
+
+	assert.NoError(t, err)
+}
+
+func TestValidateClaimString_KeyNotFound(t *testing.T) {
+	claims := jwt.MapClaims{}
+
+	err := ValidateClaimString(claims, "type", "refresh")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestValidateClaimString_ValueMismatch(t *testing.T) {
+	claims := jwt.MapClaims{
+		"type": "access",
+	}
+
+	err := ValidateClaimString(claims, "type", "refresh")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "mismatch")
+}

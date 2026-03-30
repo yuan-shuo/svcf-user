@@ -52,12 +52,12 @@ func ValidateClaimString(claims jwt.MapClaims, key string, expectedValue string)
 	// 检查 key 是否存在
 	val, ok := claims[key]
 	if !ok {
-		return fmt.Errorf("claim '%s' not found", key)
+		return fmt.Errorf("claim key: '%s' not found", key)
 	}
 
 	// 检查值是否匹配
 	if val != expectedValue {
-		return fmt.Errorf("claim '%s' mismatch: expected %v, got %v", key, expectedValue, val)
+		return fmt.Errorf("claim key: '%s' mismatch: expected %v, got %v", key, expectedValue, val)
 	}
 
 	return nil

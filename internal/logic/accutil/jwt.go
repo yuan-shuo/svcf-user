@@ -19,7 +19,15 @@ func GetUserByClaims(ctx context.Context, svcCtx *svc.ServiceContext, claims jwt
 		logx.Errorf("从 claims 中提取用户ID失败, err=%v", err)
 		return nil, errs.New(errs.CodeInternalError)
 	}
-	return svcCtx.UsersModel.FindOneBySnowflakeId(ctx, uid)
+	user, err := svcCtx.UsersModel.FindOneBySnowflakeId(ctx, uid)
+	if err != nil {
+		if err == model.ErrNotFound {
+			return nil, errs.New(errs.CodeUserNotFound)
+		}
+		logx.Errorf("基于UID获取用户实例失败, uid=%d, err=%v", uid, err)
+		return nil, errs.New(errs.CodeInternalError)
+	}
+	return user, nil
 }
 
 // GetClaimsByJWT 从 JWT 中解析 claims
@@ -27,10 +35,8 @@ func GetUserByClaims(ctx context.Context, svcCtx *svc.ServiceContext, claims jwt
 func GetClaimsByJWT(tokenString, secret string) (jwt.MapClaims, error) {
 	claims, err := utils.ParseToken(tokenString, secret)
 	if err != nil {
-		if err != jwt.ErrSignatureInvalid {
-			logx.Errorf("从 JWT 中解析 claims 失败, err=%v", err)
-			return nil, errs.New(errs.CodeInternalError)
-		}
+		logx.Errorf("从 JWT 中解析 claims 失败, err=%v", err)
+		// token 解析错误（包括格式错误、过期、签名无效等）都返回 CodeInvalidToken
 		return nil, errs.New(errs.CodeInvalidToken)
 	}
 	return claims, nil
@@ -40,6 +46,7 @@ func GetClaimsByJWT(tokenString, secret string) (jwt.MapClaims, error) {
 func IsTokenTypeEqualToRefreshToken(claims jwt.MapClaims) error {
 	err := utils.IsRefreshToken(claims)
 	if err != nil {
+		logx.Errorf("校验 JWT.tokenType 是否为 refreshToken 失败, err=%v", err)
 		return errs.New(errs.CodeInvalidToken)
 	}
 	return nil
