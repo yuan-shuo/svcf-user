@@ -5,7 +5,9 @@ microservice frame of user function: 用户微服务框架
 
 ## 更新计划
 
-1. 错误处理: 需要对user.go主执行文件的http.Ok改为错误码范围case判断，返回真实http错误码而非200
+1. 限流
+1. 可能存在的优化
+1. jwt通用组件
 
 ## 核心模块
 
@@ -15,20 +17,29 @@ microservice frame of user function: 用户微服务框架
 
 # 其他
 
-## 数据库模型生成
+如果想部署，直接看ci.yml里的测试流程也可
+
+## 数据库
+
+### 迁移
+
+```bash
+go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+go run ./cmd/migrate
+```
+
+## 生成
+
+### 数据库模型代码
 
 ```bash
 goctl model pg datasource -url="postgres://username:123456@127.0.0.1:5432/user_db?sslmode=disable" -table="users" -dir="./internal/model" -cache
 ```
 
-## redis 键命名
+### prom指标代码
 
-```go
-// account:register:verify:3695@qq.com - 服务:子功能:功能类型:参数
-// account:register:limit:3695@qq.com
-baseKey := fmt.Sprintf("%s:%s", l.svcCtx.Config.Register.SendCodeConfig.RedisKeyPrefix, l.svcCtx.Config.Register.SendCodeConfig.ReceiveType)
-// redis缓存验证码数据
-redisKey := fmt.Sprintf("%s:verify:%s", baseKey, req.Email)
-// 设置限流验证码键
-limitKey := fmt.Sprintf("%s:limit:%s", baseKey, req.Email)
+```bash
+go install github.com/yuan-shuo/gometrics@latest
+gometrics -f metrics.yaml -d ./internal/metrics
 ```
+
