@@ -11,9 +11,57 @@ import (
 )
 
 const (
-	uidFieldName   string = "uid"
-	emailFieldName string = "email"
+	uidFieldName       string = "uid"
+	emailFieldName     string = "email"
+	tokenTypeFieldName string = "type"
+	refreshTokenType   string = "refresh"
+	accessTokenType    string = "access"
 )
+
+// 添加从 claims 中提取 uid 的方法
+func GetUidFromClaims(claims jwt.MapClaims) (int64, error) {
+	val, ok := claims[uidFieldName]
+	if !ok {
+		return 0, fmt.Errorf("uid not found in claims")
+	}
+
+	switch v := val.(type) {
+	case float64:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	case string:
+		return strconv.ParseInt(v, 10, 64)
+	case json.Number:
+		return v.Int64()
+	default:
+		return 0, fmt.Errorf("unsupported uid type: %T", v)
+	}
+}
+
+// 校验rt是否正确
+func IsRefreshToken(claims jwt.MapClaims) error {
+	// 校验 token 类型
+	return ValidateClaimString(claims, tokenTypeFieldName, refreshTokenType)
+}
+
+// ValidateClaim 校验 claim 是否存在且值匹配
+func ValidateClaimString(claims jwt.MapClaims, key string, expectedValue string) error {
+	// 检查 key 是否存在
+	val, ok := claims[key]
+	if !ok {
+		return fmt.Errorf("claim '%s' not found", key)
+	}
+
+	// 检查值是否匹配
+	if val != expectedValue {
+		return fmt.Errorf("claim '%s' mismatch: expected %v, got %v", key, expectedValue, val)
+	}
+
+	return nil
+}
 
 // GetUidByJwt 安全获取 uid，支持多种类型
 func GetUidByJwt(ctx context.Context) (int64, error) {
@@ -55,12 +103,12 @@ func GetEmailByJwt(ctx context.Context) (string, error) {
 func GenerateAccessToken(secret string, expireSeconds int64, uid int64, nickname, email string) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		uidFieldName:   uid,                                                        // 用户ID
-		"nickname":     nickname,                                                   // 昵称（常用）
-		emailFieldName: email,                                                      // 邮箱（常用）
-		"type":         "access",                                                   // token类型
-		"iat":          now.Unix(),                                                 // 签发时间
-		"exp":          now.Add(time.Duration(expireSeconds) * time.Second).Unix(), // 过期时间
+		uidFieldName:       uid,                                                        // 用户ID
+		"nickname":         nickname,                                                   // 昵称（常用）
+		emailFieldName:     email,                                                      // 邮箱（常用）
+		tokenTypeFieldName: accessTokenType,                                            // token类型
+		"iat":              now.Unix(),                                                 // 签发时间
+		"exp":              now.Add(time.Duration(expireSeconds) * time.Second).Unix(), // 过期时间
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -71,10 +119,10 @@ func GenerateAccessToken(secret string, expireSeconds int64, uid int64, nickname
 func GenerateRefreshToken(secret string, expireSeconds int64, uid int64) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"uid":  uid,
-		"type": "refresh",
-		"iat":  now.Unix(),
-		"exp":  now.Add(time.Duration(expireSeconds) * time.Second).Unix(),
+		"uid":              uid,
+		tokenTypeFieldName: refreshTokenType,
+		"iat":              now.Unix(),
+		"exp":              now.Add(time.Duration(expireSeconds) * time.Second).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

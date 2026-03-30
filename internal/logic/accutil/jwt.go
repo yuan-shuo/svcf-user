@@ -5,10 +5,45 @@ import (
 	"user/internal/config"
 	"user/internal/errs"
 	"user/internal/model"
+	"user/internal/svc"
 	"user/internal/utils"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// GetUserByClaims 从 claims 中获取用户实例
+func GetUserByClaims(ctx context.Context, svcCtx *svc.ServiceContext, claims jwt.MapClaims) (*model.Users, error) {
+	uid, err := utils.GetUidFromClaims(claims)
+	if err != nil {
+		logx.Errorf("从 claims 中提取用户ID失败, err=%v", err)
+		return nil, errs.New(errs.CodeInternalError)
+	}
+	return svcCtx.UsersModel.FindOneBySnowflakeId(ctx, uid)
+}
+
+// GetClaimsByJWT 从 JWT 中解析 claims
+// 如果 token 无效，返回 err=CodeInvalidToken
+func GetClaimsByJWT(tokenString, secret string) (jwt.MapClaims, error) {
+	claims, err := utils.ParseToken(tokenString, secret)
+	if err != nil {
+		if err != jwt.ErrSignatureInvalid {
+			logx.Errorf("从 JWT 中解析 claims 失败, err=%v", err)
+			return nil, errs.New(errs.CodeInternalError)
+		}
+		return nil, errs.New(errs.CodeInvalidToken)
+	}
+	return claims, nil
+}
+
+// 校验rt是否正确
+func IsTokenTypeEqualToRefreshToken(claims jwt.MapClaims) error {
+	err := utils.IsRefreshToken(claims)
+	if err != nil {
+		return errs.New(errs.CodeInvalidToken)
+	}
+	return nil
+}
 
 // GetEmailByJwtCtx 从上下文获取用户邮箱
 func GetEmailByJwtCtx(ctx context.Context) (string, error) {

@@ -20,4 +20,5 @@ var codeMsg = map[int]string{
 	CodeUserNotExistOrPasswordIncorrect: "登录时用户名不存在或密码错误",
 	CodePasswordSameAsOld:               "新密码与旧密码相同",
 	CodeOldPasswordIncorrect:            "旧密码错误",
+	CodeInvalidToken:                    "无效的token",
 }
