@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -11,185 +12,191 @@ import (
 )
 
 const (
-	uidFieldName       string = "uid"
-	emailFieldName     string = "email"
-	tokenTypeFieldName string = "type"
-	refreshTokenType   string = "refresh"
-	accessTokenType    string = "access"
+	// 保留给旧方法兼容使用，新项目直接用结构体字段
+	// Deprecated: 使用结构体 AccessToken / RefreshToken 替代 MapClaims
+	// uidFieldName       string = "uid"
+	// emailFieldName     string = "email"
+	// tokenTypeFieldName string = "type"
+	refreshTokenType string = "refresh"
+	accessTokenType  string = "access"
 )
 
-// 添加从 claims 中提取 uid 的方法
-func GetUidFromClaims(claims jwt.MapClaims) (int64, error) {
-	val, ok := claims[uidFieldName]
-	if !ok {
-		return 0, fmt.Errorf("uid not found in claims")
-	}
+// ==================== 结构体定义（推荐方式）====================
 
-	switch v := val.(type) {
-	case float64:
-		return int64(v), nil
-	case int64:
-		return v, nil
-	case int:
-		return int64(v), nil
-	case string:
-		return strconv.ParseInt(v, 10, 64)
-	case json.Number:
-		return v.Int64()
-	default:
-		return 0, fmt.Errorf("unsupported uid type: %T", v)
-	}
+// JwtClaims JWT 令牌声明
+type JwtClaims struct {
+	Uid       json.Number `json:"uid"`     // 用户ID（json.Number 避免精度丢失）
+	Version   string      `json:"version"` // 版本号，用于强制刷新
+	TokenType string      `json:"type"`    // token类型: access/refresh
+	Iat       int64       `json:"iat"`     // 签发时间
+	Exp       int64       `json:"exp"`     // 过期时间
 }
 
-// 校验rt是否正确
-func IsRefreshToken(claims jwt.MapClaims) error {
-	// 校验 token 类型
-	return ValidateClaimString(claims, tokenTypeFieldName, refreshTokenType)
-}
-
-// ValidateClaim 校验 claim 是否存在且值匹配
-func ValidateClaimString(claims jwt.MapClaims, key string, expectedValue string) error {
-	// 检查 key 是否存在
-	val, ok := claims[key]
-	if !ok {
-		return fmt.Errorf("claim key: '%s' not found", key)
+// Valid 实现 jwt.Claims 接口
+func (c JwtClaims) Valid() error {
+	if c.Uid == "" {
+		return errors.New("uid is required")
+	}
+	if _, err := c.Uid.Int64(); err != nil {
+		return fmt.Errorf("invalid uid format: %w", err)
+	}
+	if c.TokenType == "" {
+		return errors.New("token type is required")
 	}
 
-	// 检查值是否匹配
-	if val != expectedValue {
-		return fmt.Errorf("claim key: '%s' mismatch: expected %v, got %v", key, expectedValue, val)
+	now := time.Now().Unix()
+	if now > c.Exp {
+		return errors.New("token is expired")
 	}
-
+	if now < c.Iat-60 {
+		return errors.New("token used before issued")
+	}
 	return nil
 }
 
-// GetUidByJwt 安全获取 uid，支持多种类型
-func GetUidByJwt(ctx context.Context) (int64, error) {
-	val := ctx.Value(uidFieldName)
-	if val == nil {
-		return 0, fmt.Errorf("uid not found in context")
-	}
-
-	switch v := val.(type) {
-	case int64:
-		return v, nil
-	case int:
-		return int64(v), nil
-	case json.Number: // ← 处理大数
-		return v.Int64()
-	case string:
-		return strconv.ParseInt(v, 10, 64)
-	case float64:
-		return int64(v), nil
-	default:
-		return 0, fmt.Errorf("uid type unsupported: %T, value: %v", v, v)
-	}
+// GetUID 安全获取 int64 类型的 UID
+func (c JwtClaims) GetUID() (int64, error) {
+	return c.Uid.Int64()
 }
 
-// GetEmailByJwt 安全获取 email
-func GetEmailByJwt(ctx context.Context) (string, error) {
-	val := ctx.Value(emailFieldName)
-	if val == nil {
-		return "", fmt.Errorf("email not found in context")
-	}
-
-	if s, ok := val.(string); ok {
-		return s, nil
-	}
-	return "", fmt.Errorf("email type error: %T", val)
+// AccessToken 访问令牌
+type AccessToken struct {
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
+	JwtClaims
 }
+
+// Valid 实现接口
+func (a AccessToken) Valid() error {
+	if a.Email == "" {
+		return errors.New("email is required in access token")
+	}
+	return a.JwtClaims.Valid()
+}
+
+// RefreshToken 刷新令牌
+type RefreshToken struct {
+	JwtClaims
+}
+
+// Valid 实现接口
+func (r RefreshToken) Valid() error {
+	if r.TokenType != refreshTokenType {
+		return fmt.Errorf("invalid token type for refresh: %s", r.TokenType)
+	}
+	return r.JwtClaims.Valid()
+}
+
+// ==================== Token 生成（推荐）====================
 
 // GenerateAccessToken 生成 Access Token
 func GenerateAccessToken(secret string, expireSeconds int64, uid int64, nickname, email string) (string, error) {
 	now := time.Now()
-	claims := jwt.MapClaims{
-		uidFieldName:       uid,                                                        // 用户ID
-		"nickname":         nickname,                                                   // 昵称（常用）
-		emailFieldName:     email,                                                      // 邮箱（常用）
-		tokenTypeFieldName: accessTokenType,                                            // token类型
-		"iat":              now.Unix(),                                                 // 签发时间
-		"exp":              now.Add(time.Duration(expireSeconds) * time.Second).Unix(), // 过期时间
+	claims := AccessToken{
+		Nickname: nickname,
+		Email:    email,
+		JwtClaims: JwtClaims{
+			Uid:       json.Number(strconv.FormatInt(uid, 10)),
+			Version:   "1.0",
+			TokenType: accessTokenType,
+			Iat:       now.Unix(),
+			Exp:       now.Add(time.Duration(expireSeconds) * time.Second).Unix(),
+		},
 	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
 }
 
-// GenerateRefreshToken 生成 Refresh Token（JWT格式）
+// GenerateRefreshToken 生成 Refresh Token
 func GenerateRefreshToken(secret string, expireSeconds int64, uid int64) (string, error) {
 	now := time.Now()
-	claims := jwt.MapClaims{
-		"uid":              uid,
-		tokenTypeFieldName: refreshTokenType,
-		"iat":              now.Unix(),
-		"exp":              now.Add(time.Duration(expireSeconds) * time.Second).Unix(),
+	claims := RefreshToken{
+		JwtClaims: JwtClaims{
+			Uid:       json.Number(strconv.FormatInt(uid, 10)),
+			Version:   "1.0",
+			TokenType: refreshTokenType,
+			Iat:       now.Unix(),
+			Exp:       now.Add(time.Duration(expireSeconds) * time.Second).Unix(),
+		},
 	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
 }
 
-// ParseToken 解析 JWT token
-func ParseToken(tokenString, secret string) (jwt.MapClaims, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+// ==================== Token 解析（推荐）====================
+
+// ParseAccessToken 解析 Access Token
+func ParseAccessToken(tokenString, secret string) (*AccessToken, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &AccessToken{}, func(t *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse access token failed: %w", err)
 	}
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		return claims, nil
+	claims, ok := token.Claims.(*AccessToken)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid access token claims")
 	}
-
-	return nil, jwt.ErrSignatureInvalid
+	return claims, nil
 }
 
-// // 以下是 Redis 黑名单相关函数(也许后续会加入)
+// ParseRefreshToken 解析 Refresh Token
+func ParseRefreshToken(tokenString, secret string) (*RefreshToken, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &RefreshToken{}, func(t *jwt.Token) (interface{}, error) {
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("parse refresh token failed: %w", err)
+	}
+	claims, ok := token.Claims.(*RefreshToken)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid refresh token claims")
+	}
+	return claims, nil
+}
 
-// // RevokeUserTokens 撤销用户的所有 token（修改密码、强制下线等场景）
-// func RevokeUserTokens(redisClient *redis.Redis, uid int64, revokeTime int64) error {
-//     // 记录撤销时间点
-//     key := fmt.Sprintf("user:token:revoke:%d", uid)
-//     return redisClient.Setex(key, fmt.Sprintf("%d", revokeTime), 7*24*3600) // 7天过期
-// }
+// ==================== Context 操作（推荐）====================
 
-// // IsTokenRevoked 检查 token 是否已被撤销
-// func IsTokenRevoked(redisClient *redis.Redis, claims jwt.MapClaims) (bool, error) {
-//     uid := int64(claims["uid"].(float64))
-//     iat := int64(claims["iat"].(float64))
+// UIDFromAccessToken 从 context 获取 AccessToken 的 UID
+func UIDFromAccessToken(ctx context.Context) (int64, error) {
+	claims, ok := ctx.Value("claims").(*AccessToken)
+	if !ok {
+		return 0, errors.New("access token claims not found in context")
+	}
+	return claims.GetUID()
+}
 
-//     // 查询撤销时间
-//     revokeTimeStr, err := redisClient.Get(fmt.Sprintf("user:token:revoke:%d", uid))
-//     if err != nil {
-//         // key 不存在，说明没有被撤销
-//         return false, nil
-//     }
+// UIDFromRefreshToken 从 context 获取 RefreshToken 的 UID
+func UIDFromRefreshToken(ctx context.Context) (int64, error) {
+	claims, ok := ctx.Value("claims").(*RefreshToken)
+	if !ok {
+		return 0, errors.New("refresh token claims not found in context")
+	}
+	return claims.GetUID()
+}
 
-//     var revokeTime int64
-//     fmt.Sscanf(revokeTimeStr, "%d", &revokeTime)
+// AccessTokenFromContext 获取完整的 AccessToken（需要其他字段时用）
+func AccessTokenFromContext(ctx context.Context) (*AccessToken, error) {
+	claims, ok := ctx.Value("claims").(*AccessToken)
+	if !ok {
+		return nil, errors.New("access token claims not found in context")
+	}
+	return claims, nil
+}
 
-//     // 如果 token 签发时间早于撤销时间，说明已被撤销
-//     return iat < revokeTime, nil
-// }
+// RefreshTokenFromContext 获取完整的 RefreshToken
+func RefreshTokenFromContext(ctx context.Context) (*RefreshToken, error) {
+	claims, ok := ctx.Value("claims").(*RefreshToken)
+	if !ok {
+		return nil, errors.New("refresh token claims not found in context")
+	}
+	return claims, nil
+}
 
-// // ValidateToken 验证 token（同时检查黑名单）
-// func ValidateToken(tokenString, secret string, redisClient *redis.Redis) (jwt.MapClaims, error) {
-//     // 1. 解析 JWT
-//     claims, err := ParseToken(tokenString, secret)
-//     if err != nil {
-//         return nil, err
-//     }
-
-//     // 2. 检查是否在黑名单中
-//     revoked, err := IsTokenRevoked(redisClient, claims)
-//     if err != nil {
-//         return nil, err
-//     }
-//     if revoked {
-//         return nil, errors.New("token has been revoked")
-//     }
-
-//     return claims, nil
-// }
+func GetEmailByAccessToken(ctx context.Context) (string, error) {
+	claims, ok := ctx.Value("claims").(*AccessToken)
+	if !ok {
+		return "", errors.New("access token claims not found in context")
+	}
+	return claims.Email, nil
+}

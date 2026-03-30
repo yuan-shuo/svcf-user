@@ -8,53 +8,80 @@ import (
 	"user/internal/svc"
 	"user/internal/utils"
 
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// GetUserByClaims 从 claims 中获取用户实例
-func GetUserByClaims(ctx context.Context, svcCtx *svc.ServiceContext, claims jwt.MapClaims) (*model.Users, error) {
-	uid, err := utils.GetUidFromClaims(claims)
+// GetUserByAccessTokenClaims 从 accessToken claims 中获取用户实例
+func GetUserByAccessTokenClaims(ctx context.Context, svcCtx *svc.ServiceContext) (*model.Users, error) {
+	uid, err := utils.UIDFromAccessToken(ctx)
 	if err != nil {
-		logx.Errorf("从 claims 中提取用户ID失败, err=%v", err)
+		logx.Errorf("从 accessToken claims 中提取用户ID失败, err=%v", err)
 		return nil, errs.New(errs.CodeInternalError)
 	}
-	user, err := svcCtx.UsersModel.FindOneBySnowflakeId(ctx, uid)
-	if err != nil {
-		if err == model.ErrNotFound {
-			return nil, errs.New(errs.CodeUserNotFound)
-		}
-		logx.Errorf("基于UID获取用户实例失败, uid=%d, err=%v", uid, err)
-		return nil, errs.New(errs.CodeInternalError)
-	}
-	return user, nil
+
+	return GetUserByUid(ctx, svcCtx, uid)
 }
 
-// GetClaimsByJWT 从 JWT 中解析 claims
-// 如果 token 无效，返回 err=CodeInvalidToken
-func GetClaimsByJWT(tokenString, secret string) (jwt.MapClaims, error) {
-	claims, err := utils.ParseToken(tokenString, secret)
+// GetUserByRefreshTokenClaims 从 refreshToken claims 中获取用户实例
+func GetUserByRefreshTokenClaims(ctx context.Context, svcCtx *svc.ServiceContext) (*model.Users, error) {
+	uid, err := utils.UIDFromRefreshToken(ctx)
 	if err != nil {
-		logx.Errorf("从 JWT 中解析 claims 失败, err=%v", err)
+		logx.Errorf("从 refreshToken claims 中提取用户ID失败, err=%v", err)
+		return nil, errs.New(errs.CodeInternalError)
+	}
+
+	return GetUserByUid(ctx, svcCtx, uid)
+}
+
+func GetUserByRefreshToken(ctx context.Context, svcCtx *svc.ServiceContext, rtBase64 string) (*model.Users, error) {
+	rt, err := utils.ParseRefreshToken(rtBase64, svcCtx.Config.RefreshSecret)
+	if err != nil {
+		logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
+		return nil, errs.New(errs.CodeInternalError)
+	}
+	uid, err := rt.GetUID()
+	if err != nil {
+		logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
+		return nil, errs.New(errs.CodeInternalError)
+	}
+	return GetUserByUid(ctx, svcCtx, uid)
+}
+
+// GetAccessTokenClaimsByJWT 从 JWT 中解析 accessToken claims
+func GetAccessTokenClaimsByJWT(tokenString, secret string) (*utils.AccessToken, error) {
+	accessToken, err := utils.ParseAccessToken(tokenString, secret)
+	if err != nil {
+		logx.Errorf("从 JWT 中解析 access claims 失败, err=%v", err)
 		// token 解析错误（包括格式错误、过期、签名无效等）都返回 CodeInvalidToken
 		return nil, errs.New(errs.CodeInvalidToken)
 	}
-	return claims, nil
+	return accessToken, nil
 }
 
-// 校验rt是否正确
-func IsTokenTypeEqualToRefreshToken(claims jwt.MapClaims) error {
-	err := utils.IsRefreshToken(claims)
+// GetRefreshTokenClaimsByJWT 从 JWT 中解析 refreshToken claims
+func GetRefreshTokenClaimsByJWT(tokenString, secret string) (*utils.RefreshToken, error) {
+	refreshToken, err := utils.ParseRefreshToken(tokenString, secret)
 	if err != nil {
-		logx.Errorf("校验 JWT.tokenType 是否为 refreshToken 失败, err=%v", err)
-		return errs.New(errs.CodeInvalidToken)
+		logx.Errorf("从 JWT 中解析 refresh claims 失败, err=%v", err)
+		// token 解析错误（包括格式错误、过期、签名无效等）都返回 CodeInvalidToken
+		return nil, errs.New(errs.CodeInvalidToken)
 	}
-	return nil
+	return refreshToken, nil
 }
+
+// // 校验rt是否正确
+// func IsTokenTypeEqualToRefreshToken(claims jwt.MapClaims) error {
+// 	err := utils.IsRefreshToken(claims)
+// 	if err != nil {
+// 		logx.Errorf("校验 JWT.tokenType 是否为 refreshToken 失败, err=%v", err)
+// 		return errs.New(errs.CodeInvalidToken)
+// 	}
+// 	return nil
+// }
 
 // GetEmailByJwtCtx 从上下文获取用户邮箱
 func GetEmailByJwtCtx(ctx context.Context) (string, error) {
-	email, err := utils.GetEmailByJwt(ctx)
+	email, err := utils.GetEmailByAccessToken(ctx)
 	if err != nil {
 		logx.Errorf("从JWT中提取用户邮箱失败, err=%v", err)
 		return "", errs.New(errs.CodeInternalError)
