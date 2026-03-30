@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"user/internal/config"
 	"user/internal/errs"
@@ -64,19 +63,13 @@ func setupJwtTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.Users
 func TestGetUserByAccessTokenClaims_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	// 创建包含 AccessToken claims 的 context
-	claims := &utils.AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: utils.JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: "access",
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	// 创建包含 AccessToken claims 字段的 context（模拟 go-zero 中间件行为）
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	expectedUser := &model.Users{
 		Id:           1,
@@ -110,18 +103,12 @@ func TestGetUserByAccessTokenClaims_ClaimsNotFound(t *testing.T) {
 func TestGetUserByAccessTokenClaims_UserNotFound(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	claims := &utils.AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: utils.JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: "access",
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, model.ErrNotFound)
 
@@ -136,18 +123,12 @@ func TestGetUserByAccessTokenClaims_UserNotFound(t *testing.T) {
 func TestGetUserByAccessTokenClaims_DBError(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	claims := &utils.AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: utils.JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: "access",
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, assert.AnError)
 
@@ -164,16 +145,10 @@ func TestGetUserByAccessTokenClaims_DBError(t *testing.T) {
 func TestGetUserByRefreshTokenClaims_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	claims := &utils.RefreshToken{
-		JwtClaims: utils.JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: "refresh",
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "refresh")
 
 	expectedUser := &model.Users{
 		Id:           1,
@@ -399,18 +374,12 @@ func TestGetRefreshTokenClaimsByJWT_WrongTokenType(t *testing.T) {
 // ==================== GetEmailByJwtCtx 测试 ====================
 
 func TestGetEmailByJwtCtx_Success(t *testing.T) {
-	claims := &utils.AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: utils.JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: "access",
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	email, err := GetEmailByJwtCtx(ctx)
 
@@ -483,18 +452,12 @@ func TestGenerateRefreshToken_Wrapper_Success(t *testing.T) {
 func TestGetUserByAccessJwtCtx_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	claims := &utils.AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: utils.JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: "access",
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "access")
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	expectedUser := &model.Users{
 		Id:           1,
@@ -530,16 +493,10 @@ func TestGetUserByAccessJwtCtx_ClaimsNotFound(t *testing.T) {
 func TestGetUserByRefreshJwtCtx_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
 
-	claims := &utils.RefreshToken{
-		JwtClaims: utils.JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: "refresh",
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "refresh")
 
 	expectedUser := &model.Users{
 		Id:           1,

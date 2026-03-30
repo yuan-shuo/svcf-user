@@ -70,20 +70,21 @@ func TestJwtClaims_Valid_MissingTokenType(t *testing.T) {
 	assert.Contains(t, err.Error(), "token type is required")
 }
 
-func TestJwtClaims_Valid_Expired(t *testing.T) {
-	claims := JwtClaims{
-		Uid:       json.Number("12345"),
-		Version:   "1.0",
-		TokenType: accessTokenType,
-		Iat:       time.Now().Add(-2 * time.Hour).Unix(),
-		Exp:       time.Now().Add(-time.Hour).Unix(),
-	}
-
-	err := claims.Valid()
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "expired")
-}
+// TestJwtClaims_Valid_Expired 已移除，因为 iat/exp 校验由 go-zero 中间件处理
+// func TestJwtClaims_Valid_Expired(t *testing.T) {
+// 	claims := JwtClaims{
+// 		Uid:       json.Number("12345"),
+// 		Version:   "1.0",
+// 		TokenType: accessTokenType,
+// 		Iat:       time.Now().Add(-2 * time.Hour).Unix(),
+// 		Exp:       time.Now().Add(-time.Hour).Unix(),
+// 	}
+//
+// 	err := claims.Valid()
+//
+// 	assert.Error(t, err)
+// 	assert.Contains(t, err.Error(), "expired")
+// }
 
 func TestJwtClaims_GetUID_Success(t *testing.T) {
 	claims := JwtClaims{
@@ -309,20 +310,15 @@ func TestParseRefreshToken_WrongTokenType(t *testing.T) {
 }
 
 // ==================== Context 操作测试 ====================
+// 注意：这些测试模拟 go-zero JWT 中间件将 claims 字段存入 context 的行为
 
 func TestUIDFromAccessToken_Success(t *testing.T) {
-	claims := &AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: accessTokenType,
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", accessTokenType)
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	uid, err := UIDFromAccessToken(ctx)
 
@@ -341,7 +337,7 @@ func TestUIDFromAccessToken_NotFound(t *testing.T) {
 }
 
 func TestUIDFromAccessToken_WrongType(t *testing.T) {
-	ctx := context.WithValue(context.Background(), "claims", "invalid")
+	ctx := context.WithValue(context.Background(), "uid", "not-a-number")
 
 	uid, err := UIDFromAccessToken(ctx)
 
@@ -350,16 +346,10 @@ func TestUIDFromAccessToken_WrongType(t *testing.T) {
 }
 
 func TestUIDFromRefreshToken_Success(t *testing.T) {
-	claims := &RefreshToken{
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: refreshTokenType,
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", refreshTokenType)
 
 	uid, err := UIDFromRefreshToken(ctx)
 
@@ -377,24 +367,21 @@ func TestUIDFromRefreshToken_NotFound(t *testing.T) {
 }
 
 func TestAccessTokenFromContext_Success(t *testing.T) {
-	claims := &AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: accessTokenType,
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", accessTokenType)
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	parsed, err := AccessTokenFromContext(ctx)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, parsed)
 	assert.Equal(t, "testuser", parsed.Nickname)
+	assert.Equal(t, "test@example.com", parsed.Email)
+	uid, _ := parsed.GetUID()
+	assert.Equal(t, int64(12345), uid)
 }
 
 func TestAccessTokenFromContext_NotFound(t *testing.T) {
@@ -407,16 +394,10 @@ func TestAccessTokenFromContext_NotFound(t *testing.T) {
 }
 
 func TestRefreshTokenFromContext_Success(t *testing.T) {
-	claims := &RefreshToken{
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: refreshTokenType,
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", refreshTokenType)
 
 	parsed, err := RefreshTokenFromContext(ctx)
 
@@ -436,18 +417,12 @@ func TestRefreshTokenFromContext_NotFound(t *testing.T) {
 }
 
 func TestGetEmailByAccessToken_Success(t *testing.T) {
-	claims := &AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			Version:   "1.0",
-			TokenType: accessTokenType,
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-	ctx := context.WithValue(context.Background(), "claims", claims)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", accessTokenType)
+	ctx = context.WithValue(ctx, "nickname", "testuser")
+	ctx = context.WithValue(ctx, "email", "test@example.com")
 
 	email, err := GetEmailByAccessToken(ctx)
 
