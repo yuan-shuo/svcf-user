@@ -36,45 +36,35 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	// 所需验证码类型 - 注册
 	codeType := l.svcCtx.Config.VerifyCodeConfig.Type.Register
 
-	// // 检查邮箱及验证码是否正确
-	// if err := l.verfiyEmailAndCodeInRedis(req.Email, req.Code); err != nil {
-	// 	return nil, err
-	// }
-
 	// 检查验证码是否属于对应邮箱以及是否正确
 	if err := accutil.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
+		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 检查邮箱是否被注册过
 	if err := l.checkIfEmailHasBeenRegistered(req.Email); err != nil {
+		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 密码加密
 	hashedPassword, err := accutil.HashPassword(req.Email, req.Password)
 	if err != nil {
+		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
 		return nil, err
 	}
 
-	// // 密码加密
-	// hashedPassword, err := utils.HashPassword(req.Password)
-	// if err != nil {
-	// 	// 记录详细错误日志
-	// 	logx.Errorf("密码加密失败, email=%s, err=%v", req.Email, err)
-	// 	// 返回通用错误给客户端
-	// 	return nil, errs.New(errs.CodeInternalError)
-	// }
-
 	// 数据库创建用户
 	if err := l.createUser(req.Nickname, req.Email, hashedPassword); err != nil {
-		// createUser 内部已记录详细日志，直接返回错误码
+		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 标记验证码已被使用
 	accutil.MarkCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
 
+	l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("success")
 	return
 }
 

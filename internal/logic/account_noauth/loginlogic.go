@@ -35,17 +35,20 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 	// 1. 根据邮箱获取用户
 	user, err := l.getUserByEmail(req.Email)
 	if err != nil {
+		l.svcCtx.Metrics.AccountNoauth.LoginsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 2. 校验密码
 	if err := accutil.VerifyPasswordWithVagueMismatchErrHint(user.PasswordHash, req.Password, req.Email); err != nil {
+		l.svcCtx.Metrics.AccountNoauth.LoginsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 3. 签发 accessToken
 	accessToken, err := accutil.GenerateAccessToken(l.svcCtx.Config, user)
 	if err != nil {
+		l.svcCtx.Metrics.AccountNoauth.LoginsTotal.Inc("fail")
 		return nil, err
 	}
 
@@ -55,11 +58,13 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 		// 仅在用户主动选择 "记住我" 时提供RT
 		refreshToken, err = accutil.GenerateRefreshToken(l.svcCtx.Config, user)
 		if err != nil {
+			l.svcCtx.Metrics.AccountNoauth.LoginsTotal.Inc("fail")
 			return nil, err
 		}
 	}
 
 	// 5. 构建响应
+	l.svcCtx.Metrics.AccountNoauth.LoginsTotal.Inc("success")
 	return l.buildLoginResponse(accessToken, refreshToken), nil
 }
 

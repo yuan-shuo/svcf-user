@@ -42,11 +42,13 @@ func NewSendVerifyCodeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Se
 func (l *SendVerifyCodeLogic) SendVerifyCode(req *types.SendVerifyCodeReq) (*types.SendVerifyCodeResp, error) {
 	// 验证请求参数
 	if err := l.validateRequest(req); err != nil {
+		l.svcCtx.Metrics.Verifycode.CodesSentTotal.Inc(req.Type, "fail")
 		return nil, err
 	}
 
 	// 检查限流
 	if err := l.checkRateLimit(req.Email, req.Type); err != nil {
+		l.svcCtx.Metrics.Verifycode.CodesSentTotal.Inc(req.Type, "fail")
 		return nil, err
 	}
 
@@ -54,9 +56,12 @@ func (l *SendVerifyCodeLogic) SendVerifyCode(req *types.SendVerifyCodeReq) (*typ
 	shouldContinue, err := l.checkBusinessLogic(req)
 	if err != nil {
 		l.cleanupRateLimit(req.Email, req.Type)
+		l.svcCtx.Metrics.Verifycode.CodesSentTotal.Inc(req.Type, "fail")
 		return nil, err
 	}
 	if !shouldContinue {
+		// 邮箱已注册提醒，不发送验证码但不算失败
+		l.svcCtx.Metrics.Verifycode.CodesSentTotal.Inc(req.Type, "skipped")
 		return l.buildResponse(), nil
 	}
 
@@ -67,15 +72,18 @@ func (l *SendVerifyCodeLogic) SendVerifyCode(req *types.SendVerifyCodeReq) (*typ
 	code := l.generateAndSaveCode(req)
 	if code == "" {
 		l.cleanupRateLimit(req.Email, req.Type)
+		l.svcCtx.Metrics.Verifycode.CodesSentTotal.Inc(req.Type, "fail")
 		return nil, errs.New(errs.CodeInternalError)
 	}
 
 	// 发送到消息队列
 	if err := l.sendToMQ(req.Email, code, req.Type); err != nil {
 		l.cleanupAll(req.Email, req.Type)
+		l.svcCtx.Metrics.Verifycode.CodesSentTotal.Inc(req.Type, "fail")
 		return nil, err
 	}
 
+	l.svcCtx.Metrics.Verifycode.CodesSentTotal.Inc(req.Type, "success")
 	return l.buildResponse(), nil
 }
 
@@ -170,6 +178,7 @@ func (l *SendVerifyCodeLogic) checkRateLimit(email, codeType string) error {
 		// key已存在，获取剩余时间
 		ttl, _ := l.svcCtx.Redis.Ttl(limitKey)
 		logx.Errorf("发送过于频繁, email=%s, ttl=%d", email, ttl)
+		l.svcCtx.Metrics.Verifycode.RateLimitHitsTotal.Inc(codeType)
 		return errs.New(errs.CodeInvalidParam, fmt.Sprintf("发送过于频繁，请%d秒后重试", ttl))
 	}
 

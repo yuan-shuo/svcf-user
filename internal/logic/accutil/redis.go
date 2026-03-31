@@ -36,24 +36,29 @@ func VerifyEmailAndCodeInRedis(ctx context.Context, svcCtx *svc.ServiceContext, 
 	fields, err := svcCtx.Redis.HgetallCtx(ctx, key)
 	if err != nil {
 		logx.Errorf("获取验证码信息失败, email=%s, key=%s, err=%v", email, key, err)
+		svcCtx.Metrics.Verifycode.CodeVerificationsTotal.Inc(codeType, "fail")
 		return errs.New(errs.CodeInternalError)
 	}
 
 	// 键不存在或没有 code 字段
 	if len(fields) == 0 || fields[RedisValueCodeFieldName] == "" {
+		svcCtx.Metrics.Verifycode.CodeVerificationsTotal.Inc(codeType, "invalid")
 		return errs.New(errs.CodeInvalidCode)
 	}
 
 	// 检查是否已使用
 	if fields[RedisValueUsedFieldName] != "0" {
+		svcCtx.Metrics.Verifycode.CodeVerificationsTotal.Inc(codeType, "already_used")
 		return errs.New(errs.CodeCodeAlreadyUsed)
 	}
 
 	// 比对验证码
 	if !strings.EqualFold(fields[RedisValueCodeFieldName], code) {
+		svcCtx.Metrics.Verifycode.CodeVerificationsTotal.Inc(codeType, "mismatch")
 		return errs.New(errs.CodeInvalidCode)
 	}
 
+	svcCtx.Metrics.Verifycode.CodeVerificationsTotal.Inc(codeType, "success")
 	return nil
 }
 

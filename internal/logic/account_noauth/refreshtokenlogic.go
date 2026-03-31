@@ -28,33 +28,27 @@ func NewRefreshTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Refr
 }
 
 func (l *RefreshTokenLogic) RefreshToken(req *types.RefreshTokenReq) (resp *types.RefreshTokenResp, err error) {
-	// // 校验rt签名
-	// claims, err := accutil.GetClaimsByRefreshToken(l.ctx)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// // 确认type是rt
-	// if err := accutil.IsTokenTypeEqualToRefreshToken(claims); err != nil {
-	// 	return nil, err
-	// }
-
 	// 获取用户实例
 	user, err := accutil.GetUserByRefreshToken(l.ctx, l.svcCtx, req.RefreshToken)
 	if err != nil {
+		l.svcCtx.Metrics.AccountNoauth.TokenRefreshesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 重新签发新token
 	newAccess, err := accutil.GenerateAccessToken(l.svcCtx.Config, user)
 	if err != nil {
+		l.svcCtx.Metrics.AccountNoauth.TokenRefreshesTotal.Inc("fail")
 		return nil, err
 	}
 	newRefresh, err := accutil.GenerateRefreshToken(l.svcCtx.Config, user)
 	if err != nil {
+		l.svcCtx.Metrics.AccountNoauth.TokenRefreshesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 返回响应
+	l.svcCtx.Metrics.AccountNoauth.TokenRefreshesTotal.Inc("success")
 	return &types.RefreshTokenResp{
 		AccessToken:  newAccess,
 		RefreshToken: newRefresh,
