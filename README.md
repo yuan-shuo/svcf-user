@@ -7,8 +7,6 @@ microservice frame of user function: 用户微服务框架
 
 1. 限流
 1. 可能存在的优化
-1. jwt通用组件
-1. jwt token过期（version变更）
 
 ## 核心模块
 
@@ -44,3 +42,6 @@ go install github.com/yuan-shuo/gometrics@latest
 gometrics -f metrics.yaml -d ./internal/metrics
 ```
 
+## 牢骚
+
+jwt 退出登录直接前端自己删 localstorage，别搞 redis 黑名单蛋用没有还复古 session 加 http 网关
