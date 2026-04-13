@@ -3,10 +3,12 @@ package account_noauth
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"user/internal/config"
 	"user/internal/errs"
+	"user/internal/metrics"
 	"user/internal/mock"
 	"user/internal/model"
 	"user/internal/svc"
@@ -17,6 +19,18 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// testMetrics 用于测试的全局 metrics 实例（避免重复注册）
+var testMetrics *metrics.MetricsManager
+var testMetricsOnce sync.Once
+
+// getTestMetrics 获取单例的 test metrics 实例
+func getTestMetrics() *metrics.MetricsManager {
+	testMetricsOnce.Do(func() {
+		testMetrics = metrics.NewMetricsManager()
+	})
+	return testMetrics
+}
 
 func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 	ctx := context.Background()
@@ -47,6 +61,7 @@ func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 			RefreshSecret: "test-refresh-secret",
 			RefreshExpire: 7200,
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)
@@ -94,6 +109,7 @@ func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 			},
 			// 不需要 RefreshSecret 和 RefreshExpire，因为不签发 RT
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)
@@ -125,6 +141,7 @@ func TestLoginLogic_Login_UserNotFound(t *testing.T) {
 
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
+		Metrics:    getTestMetrics(),
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)
@@ -153,6 +170,7 @@ func TestLoginLogic_Login_DatabaseError(t *testing.T) {
 
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
+		Metrics:    getTestMetrics(),
 	}
 
 	// 禁用日志输出
@@ -193,6 +211,7 @@ func TestLoginLogic_Login_InvalidPassword(t *testing.T) {
 
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
+		Metrics:    getTestMetrics(),
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)

@@ -51,6 +51,7 @@ func TestRefreshTokenLogic_RefreshToken_Success(t *testing.T) {
 			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -75,6 +76,7 @@ func TestRefreshTokenLogic_RefreshToken_InvalidToken(t *testing.T) {
 		Config: config.Config{
 			RefreshSecret: "test-refresh-secret",
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -101,6 +103,7 @@ func TestRefreshTokenLogic_RefreshToken_WrongSecret(t *testing.T) {
 		Config: config.Config{
 			RefreshSecret: "correct-secret", // 不同的 secret
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -127,6 +130,7 @@ func TestRefreshTokenLogic_RefreshToken_ExpiredToken(t *testing.T) {
 		Config: config.Config{
 			RefreshSecret: refreshSecret,
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -153,6 +157,7 @@ func TestRefreshTokenLogic_RefreshToken_NotRefreshTokenType(t *testing.T) {
 		Config: config.Config{
 			RefreshSecret: refreshSecret,
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -192,6 +197,7 @@ func TestRefreshTokenLogic_RefreshToken_UserNotFound(t *testing.T) {
 			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -232,6 +238,7 @@ func TestRefreshTokenLogic_RefreshToken_DBError(t *testing.T) {
 			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
+		Metrics: getTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)

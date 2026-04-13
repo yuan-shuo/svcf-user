@@ -2,11 +2,13 @@ package accutil
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	"user/internal/config"
 	"user/internal/errs"
+	"user/internal/metrics"
 	"user/internal/mock"
 	"user/internal/svc"
 	"user/internal/utils"
@@ -21,6 +23,18 @@ const (
 	VerifyKeyConst = "verify"
 	LimitKeyConst  = "limit"
 )
+
+// testMetrics 用于测试的全局 metrics 实例（避免重复注册）
+var testMetrics *metrics.MetricsManager
+var testMetricsOnce sync.Once
+
+// getTestMetrics 获取单例的 test metrics 实例
+func getTestMetrics() *metrics.MetricsManager {
+	testMetricsOnce.Do(func() {
+		testMetrics = metrics.NewMetricsManager()
+	})
+	return testMetrics
+}
 
 // setupRedisTest 设置 Redis 测试环境
 func setupRedisTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.UsersModel, *svc.ServiceContext) {
@@ -48,6 +62,7 @@ func setupRedisTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.Use
 		},
 		Redis:      rds,
 		UsersModel: mockUsersModel,
+		Metrics:    getTestMetrics(),
 	}
 
 	// 初始化雪花算法

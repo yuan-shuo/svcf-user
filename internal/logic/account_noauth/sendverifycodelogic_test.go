@@ -64,6 +64,7 @@ func newTestSendVerifyCodeLogic(t *testing.T, r *redis.Redis, mockUsers model.Us
 		Redis:          r,
 		KqPusherClient: mockMQ,
 		UsersModel:     mockUsers,
+		Metrics:        getTestMetrics(),
 	}
 
 	logic := NewSendVerifyCodeLogic(ctx, svcCtx)
