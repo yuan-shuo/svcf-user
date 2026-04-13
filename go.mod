@@ -5,6 +5,7 @@ go 1.25.5
 require (
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
+	github.com/jackc/pgx/v5 v5.7.4
 	github.com/sony/sonyflake v1.3.0
 	github.com/stretchr/testify v1.11.1
 	github.com/wneessen/go-mail v0.7.2
@@ -30,7 +31,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.7.4 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

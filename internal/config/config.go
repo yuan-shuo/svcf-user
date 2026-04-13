@@ -65,7 +65,16 @@ type Auth struct {
 
 // pg数据库配置
 type PostgreSQL struct {
-	Datasource string
+	Datasource string         // 数据源连接字符串
+	Pool       PostgreSQLPool // 连接池配置
+}
+
+// PostgreSQLPool 连接池配置
+type PostgreSQLPool struct {
+	MaxOpenConns    int // 最大打开连接数，默认64
+	MaxIdleConns    int // 最大空闲连接数，默认64
+	ConnMaxLifetime int // 连接最大生命周期(秒)，默认3600秒(1小时)
+	ConnMaxIdleTime int // 连接最大空闲时间(秒)，默认600秒(10分钟)
 }
 
 // // 注册配置
