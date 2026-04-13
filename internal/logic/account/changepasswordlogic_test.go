@@ -3,13 +3,11 @@ package account
 import (
 	"context"
 	"encoding/json"
-	"sync"
 	"testing"
 	"time"
 
 	"user/internal/config"
 	"user/internal/errs"
-	"user/internal/metrics"
 	"user/internal/mock"
 	"user/internal/model"
 	"user/internal/svc"
@@ -22,18 +20,6 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
-
-// testMetrics 用于测试的全局 metrics 实例（避免重复注册）
-var testMetrics *metrics.MetricsManager
-var testMetricsOnce sync.Once
-
-// getTestMetrics 获取单例的 test metrics 实例
-func getTestMetrics() *metrics.MetricsManager {
-	testMetricsOnce.Do(func() {
-		testMetrics = metrics.NewMetricsManager()
-	})
-	return testMetrics
-}
 
 // setupChangePasswordTest 设置修改密码测试环境
 func setupChangePasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.UsersModel, *svc.ServiceContext) {
@@ -60,7 +46,7 @@ func setupChangePasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, 
 		},
 		Redis:      rds,
 		UsersModel: mockUsersModel,
-		Metrics:    getTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
 	}
 
 	// 初始化雪花算法

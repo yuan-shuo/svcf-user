@@ -1,14 +1,12 @@
-package account_noauth
+﻿package account_noauth
 
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 
 	"user/internal/config"
 	"user/internal/errs"
-	"user/internal/metrics"
 	"user/internal/mock"
 	"user/internal/model"
 	"user/internal/svc"
@@ -20,23 +18,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// testMetrics 用于测试的全局 metrics 实例（避免重复注册）
-var testMetrics *metrics.MetricsManager
-var testMetricsOnce sync.Once
-
-// getTestMetrics 获取单例的 test metrics 实例
-func getTestMetrics() *metrics.MetricsManager {
-	testMetricsOnce.Do(func() {
-		testMetrics = metrics.NewMetricsManager()
-	})
-	return testMetrics
-}
-
 func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 	ctx := context.Background()
 	mockUsersModel := new(mock.UsersModel)
 
-	// 准备测试数据
+	// 鍑嗗娴嬭瘯鏁版嵁
 	email := "test@example.com"
 	password := "testpassword123"
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -48,7 +34,7 @@ func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 		PasswordHash: string(hashedPassword),
 	}
 
-	// 设置 mock 期望
+	// 璁剧疆 mock 鏈熸湜
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(user, nil)
 
 	svcCtx := &svc.ServiceContext{
@@ -61,14 +47,14 @@ func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 			RefreshSecret: "test-refresh-secret",
 			RefreshExpire: 7200,
 		},
-		Metrics: getTestMetrics(),
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)
 	req := &types.LoginReq{
 		Email:      email,
 		Password:   password,
-		RememberMe: true, // 选择记住我
+		RememberMe: true, // 閫夋嫨璁颁綇鎴?
 	}
 
 	resp, err := logic.Login(req)
@@ -76,7 +62,7 @@ func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.NotEmpty(t, resp.AccessToken)
-	assert.NotEmpty(t, resp.RefreshToken) // RememberMe=true 时应该有 refreshToken
+	assert.NotEmpty(t, resp.RefreshToken) // RememberMe=true 鏃跺簲璇ユ湁 refreshToken
 	assert.Equal(t, int64(3600), resp.ExpiresIn)
 	mockUsersModel.AssertExpectations(t)
 }
@@ -85,7 +71,7 @@ func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 	ctx := context.Background()
 	mockUsersModel := new(mock.UsersModel)
 
-	// 准备测试数据
+	// 鍑嗗娴嬭瘯鏁版嵁
 	email := "test@example.com"
 	password := "testpassword123"
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -97,7 +83,7 @@ func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 		PasswordHash: string(hashedPassword),
 	}
 
-	// 设置 mock 期望
+	// 璁剧疆 mock 鏈熸湜
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(user, nil)
 
 	svcCtx := &svc.ServiceContext{
@@ -107,16 +93,16 @@ func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 				AccessSecret: "test-access-secret",
 				AccessExpire: 3600,
 			},
-			// 不需要 RefreshSecret 和 RefreshExpire，因为不签发 RT
+			// 涓嶉渶瑕?RefreshSecret 鍜?RefreshExpire锛屽洜涓轰笉绛惧彂 RT
 		},
-		Metrics: getTestMetrics(),
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)
 	req := &types.LoginReq{
 		Email:      email,
 		Password:   password,
-		RememberMe: false, // 不选择记住我
+		RememberMe: false, // 涓嶉€夋嫨璁颁綇鎴?
 	}
 
 	resp, err := logic.Login(req)
@@ -124,7 +110,7 @@ func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.NotEmpty(t, resp.AccessToken)
-	assert.Empty(t, resp.RefreshToken) // RememberMe=false 时不应该有 refreshToken
+	assert.Empty(t, resp.RefreshToken) // RememberMe=false 鏃朵笉搴旇鏈?refreshToken
 	assert.Equal(t, int64(3600), resp.ExpiresIn)
 	mockUsersModel.AssertExpectations(t)
 }
@@ -136,12 +122,12 @@ func TestLoginLogic_Login_UserNotFound(t *testing.T) {
 	email := "notfound@example.com"
 	password := "testpassword123"
 
-	// 设置 mock 期望：用户不存在
+	// 璁剧疆 mock 鏈熸湜锛氱敤鎴蜂笉瀛樺湪
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
 
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
-		Metrics:    getTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)
@@ -165,15 +151,15 @@ func TestLoginLogic_Login_DatabaseError(t *testing.T) {
 	email := "test@example.com"
 	password := "testpassword123"
 
-	// 设置 mock 期望：数据库错误
+	// 璁剧疆 mock 鏈熸湜锛氭暟鎹簱閿欒
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, errors.New("database connection failed"))
 
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
-		Metrics:    getTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
 	}
 
-	// 禁用日志输出
+	// 绂佺敤鏃ュ織杈撳嚭
 	logx.Disable()
 
 	logic := NewLoginLogic(ctx, svcCtx)
@@ -206,12 +192,12 @@ func TestLoginLogic_Login_InvalidPassword(t *testing.T) {
 		PasswordHash: string(hashedPassword),
 	}
 
-	// 设置 mock 期望
+	// 璁剧疆 mock 鏈熸湜
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(user, nil)
 
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
-		Metrics:    getTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)

@@ -46,7 +46,7 @@ func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.
 		},
 		Redis:      rds,
 		UsersModel: mockUsersModel,
-		Metrics:    getTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
 	}
 
 	// 初始化雪花算法

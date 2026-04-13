@@ -46,7 +46,7 @@ func setupResetPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *
 		},
 		Redis:      rds,
 		UsersModel: mockUsersModel,
-		Metrics:    getTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
 	}
 
 	// 初始化雪花算法
