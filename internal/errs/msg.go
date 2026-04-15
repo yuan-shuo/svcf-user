@@ -8,6 +8,7 @@ var codeMsg = map[int]string{
 	CodeUnauthorized:                    "请先登录",
 	CodeForbidden:                       "没有权限执行此操作",
 	CodeNotFound:                        "请求的资源不存在",
+	CodeTooManyRequests:                 "请求过于频繁，请稍后重试",
 	CodeUserNotFound:                    "用户不存在",
 	CodeUserAlreadyExists:               "用户已存在",
 	CodeInvalidPassword:                 "密码错误",

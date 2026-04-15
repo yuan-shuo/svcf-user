@@ -11,11 +11,12 @@ const (
 
 	// 通用错误 (1000-1999)
 
-	CodeInternalError = 1000 // 内部错误
-	CodeInvalidParam  = 1001 // 参数错误
-	CodeUnauthorized  = 1002 // 未授权
-	CodeForbidden     = 1003 // 禁止访问
-	CodeNotFound      = 1004 // 资源不存在
+	CodeInternalError   = 1000 // 内部错误
+	CodeInvalidParam    = 1001 // 参数错误
+	CodeUnauthorized    = 1002 // 未授权
+	CodeForbidden       = 1003 // 禁止访问
+	CodeNotFound        = 1004 // 资源不存在
+	CodeTooManyRequests = 1009 // 请求过于频繁
 
 	// 用户模块错误 (2000-2999)
 

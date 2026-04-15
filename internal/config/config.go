@@ -28,9 +28,32 @@ type Config struct {
 
 	VerifyCodeConfig VerifyCodeConfig // 验证码配置
 
+	RateLimit RateLimit // 限流配置
+
 	rest.RestConf
 
 	// KqPusherConf   KqPusherConf
+}
+
+// 限流配置
+type RateLimit struct {
+	NoAuth         PeriodLimit     // 未认证接口限流配置
+	RefreshToken   TokenLimit      // 刷新token接口限流配置
+	ChangePassword PeriodLimit     // 修改密码接口限流配置
+	RedisKeyPrefix string          // 限流redis数据库键的前缀
+	RedisConfig    redis.RedisConf // 限流redis数据库配置
+}
+
+// 周期限流配置
+type PeriodLimit struct {
+	Period int // 限流周期，单位：秒
+	Quota  int // 限流阈值，单位：次
+}
+
+// Token限流配置（令牌桶）
+type TokenLimit struct {
+	Rate  int // 每秒产生的令牌数
+	Burst int // 桶容量（突发流量限制）
 }
 
 // 验证码配置
@@ -65,7 +88,16 @@ type Auth struct {
 
 // pg数据库配置
 type PostgreSQL struct {
-	Datasource string
+	Datasource string         // 数据源连接字符串
+	Pool       PostgreSQLPool // 连接池配置
+}
+
+// PostgreSQLPool 连接池配置
+type PostgreSQLPool struct {
+	MaxOpenConns    int // 最大打开连接数，默认64
+	MaxIdleConns    int // 最大空闲连接数，默认64
+	ConnMaxLifetime int // 连接最大生命周期(秒)，默认3600秒(1小时)
+	ConnMaxIdleTime int // 连接最大空闲时间(秒)，默认600秒(10分钟)
 }
 
 // // 注册配置

@@ -20,7 +20,7 @@ func TestRefreshTokenLogic_RefreshToken_Success(t *testing.T) {
 	ctx := context.Background()
 	mockUsersModel := new(mock.UsersModel)
 
-	// 准备测试数据
+	// 鍑嗗娴嬭瘯鏁版嵁
 	uid := int64(12345)
 	email := "test@example.com"
 	nickname := "testuser"
@@ -32,13 +32,13 @@ func TestRefreshTokenLogic_RefreshToken_Success(t *testing.T) {
 		Nickname:    nickname,
 	}
 
-	// 生成有效的 refresh token
+	// 鐢熸垚鏈夋晥鐨?refresh token
 	refreshSecret := "test-refresh-secret"
 	refreshExpire := int64(7200)
 	refreshToken, err := utils.GenerateRefreshToken(refreshSecret, refreshExpire, uid)
 	assert.NoError(t, err)
 
-	// 设置 mock 期望
+	// 璁剧疆 mock 鏈熸湜
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(user, nil)
 
 	svcCtx := &svc.ServiceContext{
@@ -51,6 +51,7 @@ func TestRefreshTokenLogic_RefreshToken_Success(t *testing.T) {
 			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -75,6 +76,7 @@ func TestRefreshTokenLogic_RefreshToken_InvalidToken(t *testing.T) {
 		Config: config.Config{
 			RefreshSecret: "test-refresh-secret",
 		},
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -92,15 +94,16 @@ func TestRefreshTokenLogic_RefreshToken_InvalidToken(t *testing.T) {
 func TestRefreshTokenLogic_RefreshToken_WrongSecret(t *testing.T) {
 	ctx := context.Background()
 
-	// 用错误的 secret 生成 token
+	// 鐢ㄩ敊璇殑 secret 鐢熸垚 token
 	uid := int64(12345)
 	wrongToken, err := utils.GenerateRefreshToken("wrong-secret", 7200, uid)
 	assert.NoError(t, err)
 
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			RefreshSecret: "correct-secret", // 不同的 secret
+			RefreshSecret: "correct-secret", // 涓嶅悓鐨?secret
 		},
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -118,7 +121,7 @@ func TestRefreshTokenLogic_RefreshToken_WrongSecret(t *testing.T) {
 func TestRefreshTokenLogic_RefreshToken_ExpiredToken(t *testing.T) {
 	ctx := context.Background()
 
-	// 生成已过期的 token（使用负的过期时间）
+	// 鐢熸垚宸茶繃鏈熺殑 token锛堜娇鐢ㄨ礋鐨勮繃鏈熸椂闂达級
 	refreshSecret := "test-refresh-secret"
 	expiredToken, err := utils.GenerateRefreshToken(refreshSecret, -1, 12345)
 	assert.NoError(t, err)
@@ -127,6 +130,7 @@ func TestRefreshTokenLogic_RefreshToken_ExpiredToken(t *testing.T) {
 		Config: config.Config{
 			RefreshSecret: refreshSecret,
 		},
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -144,7 +148,7 @@ func TestRefreshTokenLogic_RefreshToken_ExpiredToken(t *testing.T) {
 func TestRefreshTokenLogic_RefreshToken_NotRefreshTokenType(t *testing.T) {
 	ctx := context.Background()
 
-	// 生成 access token 而不是 refresh token
+	// 鐢熸垚 access token 鑰屼笉鏄?refresh token
 	refreshSecret := "test-refresh-secret"
 	accessToken, err := utils.GenerateAccessToken(refreshSecret, 7200, 12345, "testuser", "test@example.com")
 	assert.NoError(t, err)
@@ -153,11 +157,12 @@ func TestRefreshTokenLogic_RefreshToken_NotRefreshTokenType(t *testing.T) {
 		Config: config.Config{
 			RefreshSecret: refreshSecret,
 		},
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
 	req := &types.RefreshTokenReq{
-		RefreshToken: accessToken, // 使用 access token
+		RefreshToken: accessToken, // 浣跨敤 access token
 	}
 
 	resp, err := logic.RefreshToken(req)
@@ -175,11 +180,11 @@ func TestRefreshTokenLogic_RefreshToken_UserNotFound(t *testing.T) {
 	refreshSecret := "test-refresh-secret"
 	refreshExpire := int64(7200)
 
-	// 生成有效的 refresh token
+	// 鐢熸垚鏈夋晥鐨?refresh token
 	refreshToken, err := utils.GenerateRefreshToken(refreshSecret, refreshExpire, uid)
 	assert.NoError(t, err)
 
-	// 设置 mock 期望：用户不存在
+	// 璁剧疆 mock 鏈熸湜锛氱敤鎴蜂笉瀛樺湪
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(nil, sqlx.ErrNotFound)
 
 	svcCtx := &svc.ServiceContext{
@@ -192,6 +197,7 @@ func TestRefreshTokenLogic_RefreshToken_UserNotFound(t *testing.T) {
 			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -215,11 +221,11 @@ func TestRefreshTokenLogic_RefreshToken_DBError(t *testing.T) {
 	refreshSecret := "test-refresh-secret"
 	refreshExpire := int64(7200)
 
-	// 生成有效的 refresh token
+	// 鐢熸垚鏈夋晥鐨?refresh token
 	refreshToken, err := utils.GenerateRefreshToken(refreshSecret, refreshExpire, uid)
 	assert.NoError(t, err)
 
-	// 设置 mock 期望：数据库错误
+	// 璁剧疆 mock 鏈熸湜锛氭暟鎹簱閿欒
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(nil, assert.AnError)
 
 	svcCtx := &svc.ServiceContext{
@@ -232,6 +238,7 @@ func TestRefreshTokenLogic_RefreshToken_DBError(t *testing.T) {
 			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
+		Metrics: mock.GetTestMetrics(),
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)

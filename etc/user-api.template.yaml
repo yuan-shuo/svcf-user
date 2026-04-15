@@ -23,6 +23,28 @@ PostgreSQL:
   # 数据库链接
   Datasource: "postgres://username:123456@127.0.0.1:5432/user_db?sslmode=disable"
 
+  # 连接池配置（可选，不想配置就跳过这个配置字段，程序会自行使用默认值）
+  Pool:
+
+    # 最大打开连接数，默认64
+    # 作用：限制并发连接数，避免数据库被大量请求压垮
+    MaxOpenConns: 64
+
+    # 最大空闲连接数，默认64
+    # 当一个连接使用完成后，会存到空闲连接池，等待被再次使用
+    # 作用：保持空闲连接，避免频繁创建销毁带来的开销
+    MaxIdleConns: 64
+
+    # 连接最大生命周期(秒)，默认3600秒(1小时)
+    # 一个连接从创建开始能存活的最长时间，到期后会被关闭并重建
+    # 作用：防止连接长期不刷新导致的问题（如防火墙超时、数据库端连接超时）
+    ConnMaxLifetime: 3600
+
+    # 连接最大空闲时间(秒)，默认600秒(10分钟)
+    # 超过此时间的空闲连接会被关闭
+    # 作用：及时释放不用的连接，减少资源占用
+    ConnMaxIdleTime: 600
+
 # 邮件发送服务配置
 SmtpConfig:
 
@@ -109,6 +131,47 @@ Prometheus:
   Host: 0.0.0.0
   Port: 9101
   Path: /metrics
+
+# gozero 组件配置
+
+# CPU 使用率 — 每 250 ms 采样一次，超过阈值（默认 90%）时激活降载
+# 90%，单位为毫核×10（0-1000）
+CpuThreshold: 900
+
+# 超过此时间的请求会自动收到 HTTP 408 响应
+# 毫秒（默认值：3000）
+Timeout: 3000
+
+# 限流配置
+RateLimit:
+
+  # 未认证接口限流配置（周期限流 - 固定窗口）
+  NoAuth:
+    Period: 3600 # 限流周期，单位：秒
+    Quota: 1000 # 限流阈值，单位：次
+
+  # 刷新token接口限流配置（令牌桶限流）
+  RefreshToken:
+    Rate: 10  # 每秒产生的令牌数
+    Burst: 20 # 桶容量，允许突发流量
+
+  # 修改密码接口限流配置（周期限流 - 固定窗口）
+  ChangePassword:
+    Period: 3600 # 限流周期，单位：秒（1小时）
+    Quota: 10    # 限流阈值，单位：次（每小时最多10次）
+
+  # 限流redis数据库键的前缀
+  RedisKeyPrefix: "user:limit"
+  # 限流redis数据库配置
+  RedisConfig:
+    # redis数据库地址
+    Host: localhost:6379 
+    # 其他可选参数
+    Type: node
+    Tls: false
+    NonBlock: true
+    PingTimeout: 1s
+
 
 # --- 以下配置已废弃 ---
 

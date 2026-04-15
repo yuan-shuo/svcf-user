@@ -33,16 +33,19 @@ func (l *ResetPasswordLogic) ResetPassword(req *types.ResetPasswordReq) (resp *t
 
 	// 检查验证码是否属于对应邮箱以及是否正确
 	if err := accutil.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
+		l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 重置用户密码
 	if err := accutil.ResetUserPasswordByEmail(l.ctx, l.svcCtx, req.Email, req.Password); err != nil {
+		l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 标记已被使用
 	accutil.MarkCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
 
+	l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("success")
 	return
 }
