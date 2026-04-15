@@ -216,7 +216,7 @@ func TestCodeError_judgeErrsStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := &CodeError{Code: tt.code}
-			got := e.judgeErrsStatus()
+			got := e.JudgeErrsStatus()
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -444,6 +444,7 @@ func TestHTTPStatusValidity(t *testing.T) {
 		http.StatusForbidden,           // 403
 		http.StatusNotFound,            // 404
 		http.StatusConflict,            // 409
+		http.StatusTooManyRequests,     // 429
 		http.StatusInternalServerError, // 500
 	}
 

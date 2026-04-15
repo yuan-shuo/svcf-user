@@ -1,4 +1,4 @@
-﻿package account_noauth
+package account_noauth
 
 import (
 	"context"

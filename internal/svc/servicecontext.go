@@ -9,19 +9,25 @@ import (
 	"user/internal/config"
 	"user/internal/db"
 	"user/internal/metrics"
+	"user/internal/middleware"
+	"user/internal/middleware/limiter"
 	"user/internal/model"
 	"user/internal/utils"
 
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/zeromicro/go-zero/rest"
 )
 
 type ServiceContext struct {
-	Config         config.Config           // 配置文件
-	KqPusherClient KqPusherClient          // 生产者实例
-	Redis          *redis.Redis            // redis 数据库
-	UsersModel     model.UsersModel        // SQL 数据库
-	Metrics        *metrics.MetricsManager // 观测指标
+	Config              config.Config           // 配置文件
+	KqPusherClient      KqPusherClient          // 生产者实例
+	Redis               *redis.Redis            // redis 数据库
+	UsersModel          model.UsersModel        // SQL 数据库
+	Metrics             *metrics.MetricsManager // 观测指标
+	NoAuthLimit         rest.Middleware         // 无认证接口限流中间件
+	RefreshTokenLimit   rest.Middleware         // 刷新token接口限流中间件
+	ChangePasswordLimit rest.Middleware         // 修改密码接口限流中间件
 }
 
 // 定义为接口方便单元测试
@@ -37,6 +43,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(fmt.Sprintf("初始化雪花算法失败: %v", err))
 	}
 
+	// 初始化限流器redis数据库
+	rateLimiterRedis := db.NewRedis(c.RateLimit.RedisConfig)
+	// 初始化限流器
+	noAuthLimiter := limiter.NewNoAuthPeriodLimiter(c, rateLimiterRedis)                 // 未认证接口限流器
+	refreshTokenLimiter := limiter.NewRefreshTokenLimiter(c, rateLimiterRedis)           // 刷新token接口限流器
+	changePasswordLimiter := limiter.NewChangePasswordPeriodLimiter(c, rateLimiterRedis) // 修改密码接口限流器
+
 	// 返回上下文
 	return &ServiceContext{
 		Config: c,
@@ -48,8 +61,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			// c.KqPusherConf.Topic,
 			kq.WithAllowAutoTopicCreation(),
 		),
-		Redis:      db.NewRedis(c.RedisConfig),
-		UsersModel: model.NewUsersModel(db.NewPostgreSQL(c.PostgreSQL), c.CacheRedis),
-		Metrics:    metrics.NewMetricsManager(),
+		Redis:               db.NewRedis(c.RedisConfig),
+		UsersModel:          model.NewUsersModel(db.NewPostgreSQL(c.PostgreSQL), c.CacheRedis),
+		Metrics:             metrics.NewMetricsManager(),
+		NoAuthLimit:         middleware.NewNoAuthLimitMiddleware(noAuthLimiter),
+		RefreshTokenLimit:   middleware.NewRefreshTokenLimitMiddleware(refreshTokenLimiter),
+		ChangePasswordLimit: middleware.NewChangePasswordLimitMiddleware(changePasswordLimiter),
 	}
 }

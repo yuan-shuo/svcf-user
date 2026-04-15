@@ -15,45 +15,60 @@ import (
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodPost,
-				Path:    "/changepassword",
-				Handler: account.ChangePasswordHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.ChangePasswordLimit},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/changepassword",
+					Handler: account.ChangePasswordHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api/account/v1"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodPost,
-				Path:    "/login",
-				Handler: account_noauth.LoginHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/refreshtoken",
-				Handler: account_noauth.RefreshTokenHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/register",
-				Handler: account_noauth.RegisterHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/resetpassword",
-				Handler: account_noauth.ResetPasswordHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/verifycode",
-				Handler: account_noauth.SendVerifyCodeHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.NoAuthLimit},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/login",
+					Handler: account_noauth.LoginHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/register",
+					Handler: account_noauth.RegisterHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/resetpassword",
+					Handler: account_noauth.ResetPasswordHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/verifycode",
+					Handler: account_noauth.SendVerifyCodeHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/account/v1/noauth"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.RefreshTokenLimit},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/refreshtoken",
+					Handler: account_noauth.RefreshTokenHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithPrefix("/api/account/v1/noauth"),
 	)
 }

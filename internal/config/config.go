@@ -28,9 +28,32 @@ type Config struct {
 
 	VerifyCodeConfig VerifyCodeConfig // 验证码配置
 
+	RateLimit RateLimit // 限流配置
+
 	rest.RestConf
 
 	// KqPusherConf   KqPusherConf
+}
+
+// 限流配置
+type RateLimit struct {
+	NoAuth         PeriodLimit     // 未认证接口限流配置
+	RefreshToken   TokenLimit      // 刷新token接口限流配置
+	ChangePassword PeriodLimit     // 修改密码接口限流配置
+	RedisKeyPrefix string          // 限流redis数据库键的前缀
+	RedisConfig    redis.RedisConf // 限流redis数据库配置
+}
+
+// 周期限流配置
+type PeriodLimit struct {
+	Period int // 限流周期，单位：秒
+	Quota  int // 限流阈值，单位：次
+}
+
+// Token限流配置（令牌桶）
+type TokenLimit struct {
+	Rate  int // 每秒产生的令牌数
+	Burst int // 桶容量（突发流量限制）
 }
 
 // 验证码配置

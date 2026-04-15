@@ -40,14 +40,14 @@ func (e *CodeError) Data() *CodeErrorResponse {
 func ErrsHandler(err error) (int, any) {
 	switch e := err.(type) {
 	case *CodeError:
-		return e.judgeErrsStatus(), e.Data()
+		return e.JudgeErrsStatus(), e.Data()
 	default:
 		return http.StatusInternalServerError, nil
 	}
 }
 
 // 统一管理http错误码返回方式
-func (e *CodeError) judgeErrsStatus() int {
+func (e *CodeError) JudgeErrsStatus() int {
 	return errorHTTPStatus[e.Code]
 }
 

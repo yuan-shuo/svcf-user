@@ -142,6 +142,37 @@ CpuThreshold: 900
 # 毫秒（默认值：3000）
 Timeout: 3000
 
+# 限流配置
+RateLimit:
+
+  # 未认证接口限流配置（周期限流 - 固定窗口）
+  NoAuth:
+    Period: 3600 # 限流周期，单位：秒
+    Quota: 1000 # 限流阈值，单位：次
+
+  # 刷新token接口限流配置（令牌桶限流）
+  RefreshToken:
+    Rate: 10  # 每秒产生的令牌数
+    Burst: 20 # 桶容量，允许突发流量
+
+  # 修改密码接口限流配置（周期限流 - 固定窗口）
+  ChangePassword:
+    Period: 3600 # 限流周期，单位：秒（1小时）
+    Quota: 10    # 限流阈值，单位：次（每小时最多10次）
+
+  # 限流redis数据库键的前缀
+  RedisKeyPrefix: "user:limit"
+  # 限流redis数据库配置
+  RedisConfig:
+    # redis数据库地址
+    Host: localhost:6379 
+    # 其他可选参数
+    Type: node
+    Tls: false
+    NonBlock: true
+    PingTimeout: 1s
+
+
 # --- 以下配置已废弃 ---
 
 # (2026-03-17 #1) 废弃原因: 照着gozero官方写的，但是这个场景为啥要让brokers和topic不一致?

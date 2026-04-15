@@ -3,9 +3,10 @@ syntax = "v1"
 // goctl api go --api user.api --dir .
 // goctl api validate --api user.api
 @server (
-	group:  account
-	prefix: api/account/v1
-	jwt:    Auth
+	group:      account
+	prefix:     api/account/v1
+	jwt:        Auth
+	middleware: ChangePasswordLimit
 )
 service user-api {
 	// 修改密码
@@ -15,8 +16,9 @@ service user-api {
 
 // 无认证服务接口
 @server (
-	group:  account_noauth
-	prefix: api/account/v1/noauth
+	group:      account_noauth
+	prefix:     api/account/v1/noauth
+	middleware: NoAuthLimit
 )
 service user-api {
 	// 验证码
@@ -34,7 +36,15 @@ service user-api {
 	// 用户找回密码
 	@handler resetPassword
 	post /resetpassword (ResetPasswordReq) returns (ResetPasswordResp)
+}
 
+// 刷新 token 接口 - 单独限流
+@server (
+	group:      account_noauth
+	prefix:     api/account/v1/noauth
+	middleware: RefreshTokenLimit
+)
+service user-api {
 	// 刷新 access + refresh token
 	@handler refreshToken
 	post /refreshtoken (RefreshTokenReq) returns (RefreshTokenResp)
