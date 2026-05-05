@@ -28,13 +28,13 @@ var (
 
 // PasswordValidationResult 密码校验结果
 type PasswordValidationResult struct {
-	Valid      bool     // 是否通过校验
-	Errors     []error  // 所有错误
-	Length     int      // 密码长度
-	HasUpper   bool     // 是否有大写字母
-	HasLower   bool     // 是否有小写字母
-	HasDigit   bool     // 是否有数字
-	HasSpecial bool     // 是否有特殊字符
+	Valid      bool    // 是否通过校验
+	Errors     []error // 所有错误
+	Length     int     // 密码长度
+	HasUpper   bool    // 是否有大写字母
+	HasLower   bool    // 是否有小写字母
+	HasDigit   bool    // 是否有数字
+	HasSpecial bool    // 是否有特殊字符
 }
 
 // ValidatePassword 校验密码强度
