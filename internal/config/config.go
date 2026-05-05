@@ -31,8 +31,6 @@ type Config struct {
 	RateLimit RateLimit // 限流配置
 
 	rest.RestConf
-
-	// KqPusherConf   KqPusherConf
 }
 
 // 限流配置
@@ -100,25 +98,6 @@ type PostgreSQLPool struct {
 	ConnMaxIdleTime int // 连接最大空闲时间(秒)，默认600秒(10分钟)
 }
 
-// // 注册配置
-// type Register struct {
-// 	SendCodeConfig SendCodeConfig
-// }
-
-// // 验证码发送配置
-// type SendCodeConfig struct {
-// 	// ReceiveType    string // 接收验证码类型
-// 	// ExpireIn       int
-// 	// RetryAfter     int
-// 	// RedisKeyPrefix string // 存放于redis时使用的键名前缀, 给入a则redis.key=a:receiver_email
-// 	// ReminderType ReminderType
-// }
-
-// // 提醒类型消息
-// type ReminderType struct {
-// 	Registered string // 邮箱已注册
-// }
-
 // 邮件发送配置
 type SmtpConfig struct {
 	Host     string
@@ -127,9 +106,3 @@ type SmtpConfig struct {
 	Password string
 	From     string
 }
-
-// // 消息队列生产者配置 暂时废弃
-// type KqPusherConf struct {
-// 	Brokers []string
-// 	Topic   string
-// }
