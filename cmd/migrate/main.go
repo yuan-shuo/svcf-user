@@ -1,17 +1,14 @@
 package main
 
-// 需要提前自行创建数据并确保用户权限给够
-
-// 1. 读取配置文件
-// 2. 执行数据库迁移
-
 import (
 	"flag"
-	"os"
-	"os/exec"
+	"log"
 
 	"user/internal/config"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/zeromicro/go-zero/core/conf"
 )
 
@@ -25,16 +22,20 @@ func main() {
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
 
-	// 一行命令：直接调用 migrate
-	cmd := exec.Command("migrate",
-		"-source", "file://migrations",
-		"-database", c.PostgreSQL.Datasource,
-		"up")
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		panic(err)
+	// 直接使用 go-migrate 库
+	m, err := migrate.New(
+		"file://migrations",
+		c.PostgreSQL.Datasource,
+	)
+	if err != nil {
+		log.Fatalf("创建 migrate 实例失败: %v", err)
 	}
+	defer m.Close()
+
+	// 执行迁移
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatalf("迁移失败: %v", err)
+	}
+
+	log.Println("迁移成功！")
 }

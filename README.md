@@ -5,14 +5,17 @@ microservice frame of user function: 用户微服务框架
 
 ## 更新计划
 
+1. 密码强度校验
 1. 限流
+1. 容器化
+1. taskfile
 1. 可能存在的优化
 
 ## 核心模块
 
 1. (svc) user.go 用户系统微服务 
 2. (svc) cmd/mqs 微服务消费者
-3. (job) cmd/migrate 数据库迁移工具 (需要配合go-migrate工具使用)
+3. (job) cmd/migrate 数据库迁移工具
 
 # 其他
 
@@ -23,7 +26,6 @@ microservice frame of user function: 用户微服务框架
 ### 迁移
 
 ```bash
-go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 go run ./cmd/migrate
 ```
 
@@ -44,4 +46,4 @@ gometrics -f metrics.yaml -d ./internal/metrics
 
 ## 牢骚
 
-jwt 退出登录直接前端自己删 localstorage，别搞 redis 黑名单蛋用没有还复古 session 加 http 网关
+jwt 退出登录直接前端自己删 localstorage，别搞 redis 黑名单没用还复古 session 加 http 网关
