@@ -22,4 +22,5 @@ var codeMsg = map[int]string{
 	CodePasswordSameAsOld:               "新密码与旧密码相同",
 	CodeOldPasswordIncorrect:            "旧密码错误",
 	CodeInvalidToken:                    "无效的token",
+	CodeWeakPassword:                    "密码强度不足，请使用至少8位包含大小写字母、数字和特殊字符的密码",
 }

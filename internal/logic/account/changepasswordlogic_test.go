@@ -80,8 +80,8 @@ func TestChangePasswordLogic_ChangePassword_Success(t *testing.T) {
 	// 准备测试数据
 	email := "test@example.com"
 	code := "123456"
-	oldPassword := "oldpassword123"
-	newPassword := "newpassword123"
+	oldPassword := "OldPassword123!"
+	newPassword := "NewPassword123!"
 
 	// 先生成旧密码的哈希
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
@@ -133,8 +133,8 @@ func TestChangePasswordLogic_ChangePassword_InvalidCode(t *testing.T) {
 	email := "test@example.com"
 	code := "123456"
 	wrongCode := "wrongcode"
-	oldPassword := "oldpassword123"
-	newPassword := "newpassword123"
+	oldPassword := "OldPassword123!"
+	newPassword := "NewPassword123!"
 
 	// 在 redis 中设置验证码
 	key := "account:change_password:verify:" + email
@@ -168,8 +168,8 @@ func TestChangePasswordLogic_ChangePassword_CodeAlreadyUsed(t *testing.T) {
 
 	email := "test@example.com"
 	code := "123456"
-	oldPassword := "oldpassword123"
-	newPassword := "newpassword123"
+	oldPassword := "OldPassword123!"
+	newPassword := "NewPassword123!"
 
 	// 在 redis 中设置验证码 - 已使用
 	key := "account:change_password:verify:" + email
@@ -202,8 +202,8 @@ func TestChangePasswordLogic_ChangePassword_CodeNotFound(t *testing.T) {
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
 	code := "123456"
-	oldPassword := "oldpassword123"
-	newPassword := "newpassword123"
+	oldPassword := "OldPassword123!"
+	newPassword := "NewPassword123!"
 
 	// 不设置验证码到 redis
 
@@ -233,8 +233,8 @@ func TestChangePasswordLogic_ChangePassword_UserNotFound(t *testing.T) {
 
 	email := "test@example.com"
 	code := "123456"
-	oldPassword := "oldpassword123"
-	newPassword := "newpassword123"
+	oldPassword := "OldPassword123!"
+	newPassword := "NewPassword123!"
 
 	// 在 redis 中设置验证码
 	key := "account:change_password:verify:" + email
@@ -271,9 +271,9 @@ func TestChangePasswordLogic_ChangePassword_OldPasswordIncorrect(t *testing.T) {
 
 	email := "test@example.com"
 	code := "123456"
-	oldPassword := "oldpassword123"
-	wrongOldPassword := "wrongpassword"
-	newPassword := "newpassword123"
+	oldPassword := "OldPassword123!"
+	wrongOldPassword := "WrongPassword123!"
+	newPassword := "NewPassword123!"
 
 	// 先生成旧密码的哈希
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
@@ -320,7 +320,7 @@ func TestChangePasswordLogic_ChangePassword_SameAsOldPassword(t *testing.T) {
 
 	email := "test@example.com"
 	code := "123456"
-	oldPassword := "oldpassword123"
+	oldPassword := "OldPassword123!"
 
 	// 先生成旧密码的哈希
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
@@ -357,6 +357,55 @@ func TestChangePasswordLogic_ChangePassword_SameAsOldPassword(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
+// TestChangePasswordLogic_ChangePassword_WeakPassword 测试密码强度不足
+func TestChangePasswordLogic_ChangePassword_WeakPassword(t *testing.T) {
+	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
+	defer s.Close()
+
+	ctx := createTestContextWithAccessToken(12345, "test@example.com")
+
+	logic := NewChangePasswordLogic(ctx, svcCtx)
+
+	email := "test@example.com"
+	code := "123456"
+	oldPassword := "OldPassword123!"
+	weakNewPassword := "weak"
+
+	// 先生成旧密码的哈希
+	hashedOldPassword, _ := utils.HashPassword(oldPassword)
+
+	// 在 redis 中设置验证码
+	key := "account:change_password:verify:" + email
+	s.HSet(key, "code", code)
+	s.HSet(key, "used", "0")
+	s.SetTTL(key, 5*time.Minute)
+
+	// 设置 mock 期望
+	expectedUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  12345,
+		Email:        email,
+		Nickname:     "testuser",
+		PasswordHash: hashedOldPassword,
+	}
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
+
+	// 执行测试 - 使用弱密码
+	req := &types.ChangePasswordReq{
+		OldPassword: oldPassword,
+		NewPassword: weakNewPassword,
+		Code:        code,
+	}
+
+	resp, err := logic.ChangePassword(req)
+
+	// 验证结果
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
+	mockUsersModel.AssertExpectations(t)
+}
+
 func TestChangePasswordLogic_ChangePassword_UpdateFailed(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
@@ -367,8 +416,8 @@ func TestChangePasswordLogic_ChangePassword_UpdateFailed(t *testing.T) {
 
 	email := "test@example.com"
 	code := "123456"
-	oldPassword := "oldpassword123"
-	newPassword := "newpassword123"
+	oldPassword := "OldPassword123!"
+	newPassword := "NewPassword123!"
 
 	// 先生成旧密码的哈希
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
@@ -416,8 +465,8 @@ func TestChangePasswordLogic_ChangePassword_EmailNotInContext(t *testing.T) {
 	logic := NewChangePasswordLogic(ctx, svcCtx)
 
 	code := "123456"
-	oldPassword := "oldpassword123"
-	newPassword := "newpassword123"
+	oldPassword := "OldPassword123!"
+	newPassword := "NewPassword123!"
 
 	// 执行测试
 	req := &types.ChangePasswordReq{

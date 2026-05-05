@@ -80,7 +80,7 @@ func TestResetUserPassword_Success(t *testing.T) {
 
 	ctx := context.Background()
 	email := "test@example.com"
-	newPassword := "newpassword123"
+	newPassword := "NewPassword123!"
 
 	// 设置 mock 期望
 	existingUser := &model.Users{
@@ -108,7 +108,7 @@ func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
 
 	ctx := context.Background()
 	email := "test@example.com"
-	oldPassword := "oldpassword123"
+	oldPassword := "OldPassword123!"
 
 	// 创建一个已有密码的用户
 	hashedOldPassword, _ := HashPassword(email, oldPassword)
@@ -127,12 +127,34 @@ func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
 	assert.True(t, mock.IsCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
 }
 
+func TestResetUserPassword_WeakPassword(t *testing.T) {
+	_, _, _, svcCtx := setupPasswordTest(t)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	weakPassword := "weak" // 弱密码
+
+	existingUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  123456789,
+		Email:        email,
+		Nickname:     "testuser",
+		PasswordHash: "oldhashedpassword",
+	}
+
+	// 尝试使用弱密码重置
+	err := ResetUserPassword(ctx, svcCtx, existingUser, weakPassword)
+
+	assert.Error(t, err)
+	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
+}
+
 func TestResetUserPasswordByEmail_Success(t *testing.T) {
 	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
 
 	ctx := context.Background()
 	email := "test@example.com"
-	newPassword := "newpassword123"
+	newPassword := "NewPassword123!"
 
 	// 设置 mock 期望
 	existingUser := &model.Users{
@@ -156,7 +178,7 @@ func TestResetUserPasswordByEmail_UserNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	email := "test@example.com"
-	newPassword := "newpassword123"
+	newPassword := "NewPassword123!"
 
 	// 设置 mock 期望 - 用户不存在
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
@@ -166,6 +188,29 @@ func TestResetUserPasswordByEmail_UserNotFound(t *testing.T) {
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotFound), "应该是用户不存在错误")
 	mockUsersModel.AssertExpectations(t)
+}
+
+func TestResetUserPasswordByEmail_WeakPassword(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupPasswordTest(t)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	weakPassword := "123" // 弱密码
+
+	// 设置 mock 期望
+	existingUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  123456789,
+		Email:        email,
+		Nickname:     "testuser",
+		PasswordHash: "oldhashedpassword",
+	}
+	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
+
+	err := ResetUserPasswordByEmail(ctx, svcCtx, email, weakPassword)
+
+	assert.Error(t, err)
+	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
 }
 
 func TestGetUserByEmail_Success(t *testing.T) {
@@ -255,4 +300,52 @@ func TestVerifyPasswordWithOldPasswordMismatchErrHint_InvalidPassword(t *testing
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeOldPasswordIncorrect), "应该是旧密码错误")
+}
+
+// TestValidatePasswordStrength_Success 测试密码强度校验 - 强密码
+func TestValidatePasswordStrength_Success(t *testing.T) {
+	password := "StrongPass123!"
+	err := ValidatePasswordStrength(password)
+	assert.NoError(t, err)
+}
+
+// TestValidatePasswordStrength_WeakPassword 测试密码强度校验 - 弱密码
+func TestValidatePasswordStrength_WeakPassword(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+	}{
+		{
+			name:     "太短",
+			password: "Short1!",
+		},
+		{
+			name:     "缺少大写",
+			password: "password123!",
+		},
+		{
+			name:     "缺少小写",
+			password: "PASSWORD123!",
+		},
+		{
+			name:     "缺少数字",
+			password: "Password!!!",
+		},
+		{
+			name:     "缺少特殊字符",
+			password: "Password123",
+		},
+		{
+			name:     "空密码",
+			password: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePasswordStrength(tt.password)
+			assert.Error(t, err)
+			assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
+		})
+	}
 }

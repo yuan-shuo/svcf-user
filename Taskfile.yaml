@@ -1,0 +1,83 @@
+version: '3'
+
+vars:
+  HARBOR: harbor.aityp.com
+  PROJECT: myproject
+  VERSION:
+    sh: git describe --tags --always --dirty 2>nul || echo dev-$(Get-Date -Format yyyyMMdd-HHmmss)
+
+env:
+  GOOS: linux
+  GOARCH: amd64
+  CGO_ENABLED: "0"
+
+silent: true
+
+tasks:
+  default:
+    desc: 默认任务：编译所有服务并打包 Docker 镜像
+    deps: [docker-build-all]
+
+  build-all:
+    desc: 编译所有二进制
+    deps: [build-api, build-migrate, build-mqs]
+
+  build-api:
+    desc: 编译 user-api 二进制
+    cmds:
+      - go build -ldflags="-s -w" -o bin/user-api .
+    generates:
+      - bin/user-api
+
+  build-migrate:
+    desc: 编译 user-migrate 二进制
+    cmds:
+      - go build -ldflags="-s -w" -o bin/user-migrate ./cmd/migrate
+    generates:
+      - bin/user-migrate
+
+  build-mqs:
+    desc: 编译 user-mqs 二进制
+    cmds:
+      - go build -ldflags="-s -w" -o bin/user-mqs ./cmd/mqs
+    generates:
+      - bin/user-mqs
+
+  docker-build-all:
+    desc: 编译所有二进制并打包为 Docker 镜像
+    deps: [build-all]
+    cmds:
+      - task: docker-build-api
+      - task: docker-build-migrate
+      - task: docker-build-mqs
+
+  docker-build-api:
+    desc: 打包 user-api Docker 镜像
+    deps: [build-api]
+    cmds:
+      - docker build -t {{.HARBOR}}/{{.PROJECT}}/user-api:{{.VERSION}} -f dockerfiles/api.Dockerfile .
+
+  docker-build-migrate:
+    desc: 打包 user-migrate Docker 镜像
+    deps: [build-migrate]
+    cmds:
+      - docker build -t {{.HARBOR}}/{{.PROJECT}}/user-migrate:{{.VERSION}} -f dockerfiles/migrate.Dockerfile .
+
+  docker-build-mqs:
+    desc: 打包 user-mqs Docker 镜像
+    deps: [build-mqs]
+    cmds:
+      - docker build -t {{.HARBOR}}/{{.PROJECT}}/user-mqs:{{.VERSION}} -f dockerfiles/mqs.Dockerfile .
+
+  docker-push-all:
+    desc: 推送所有镜像到仓库
+    deps: [docker-build-all]
+    cmds:
+      - docker push {{.HARBOR}}/{{.PROJECT}}/user-api:{{.VERSION}}
+      - docker push {{.HARBOR}}/{{.PROJECT}}/user-migrate:{{.VERSION}}
+      - docker push {{.HARBOR}}/{{.PROJECT}}/user-mqs:{{.VERSION}}
+
+  version:
+    desc: 查看当前版本号
+    cmds:
+      - echo {{.VERSION}}

@@ -2,6 +2,7 @@ syntax = "v1"
 
 // goctl api go --api user.api --dir .
 // goctl api validate --api user.api
+// goctl api ts --api user.api --dir tscode
 @server (
 	group:      account
 	prefix:     api/account/v1
