@@ -34,5 +34,6 @@ const (
 	CodePasswordSameAsOld               = 2101 // 新密码与旧密码相同
 	CodeOldPasswordIncorrect            = 2102 // 旧密码错误
 	CodeInvalidToken                    = 2103 // 无效的token
+	CodeWeakPassword                    = 2104 // 密码强度不足
 
 )

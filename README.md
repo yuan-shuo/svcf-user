@@ -5,10 +5,7 @@ microservice frame of user function: 用户微服务框架
 
 ## 更新计划
 
-1. 密码强度校验
 1. 限流
-1. 容器化
-1. taskfile
 1. 可能存在的优化
 
 ## 核心模块

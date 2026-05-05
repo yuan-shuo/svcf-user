@@ -48,6 +48,12 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 		return nil, err
 	}
 
+	// 校验密码强度
+	if err := accutil.ValidatePasswordStrength(req.Password); err != nil {
+		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
+		return nil, err
+	}
+
 	// 密码加密
 	hashedPassword, err := accutil.HashPassword(req.Email, req.Password)
 	if err != nil {

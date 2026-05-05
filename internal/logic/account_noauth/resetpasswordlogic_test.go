@@ -2,7 +2,6 @@ package account_noauth
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -66,7 +65,7 @@ func TestResetPasswordLogic_ResetPassword_Success(t *testing.T) {
 	// 准备测试数据
 	email := "test@example.com"
 	code := "123456"
-	newPassword := "newpassword123"
+	newPassword := "NewPassword123!"
 
 	// 在 redis 中设置验证码
 	key := "account:reset_password:verify:" + email
@@ -113,19 +112,20 @@ func TestResetPasswordLogic_ResetPassword_InvalidCode(t *testing.T) {
 
 	// 准备测试数据
 	email := "test@example.com"
-	code := "wrongcode"
+	code := "123456"
+	wrongCode := "wrongcode"
 
 	// 在 redis 中设置正确的验证码
 	key := "account:reset_password:verify:" + email
-	s.HSet(key, "code", "123456")
+	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
 
-	// 执行测试
+	// 执行测试 - 使用错误的验证码
 	req := &types.ResetPasswordReq{
 		Email:    email,
-		Password: "newpassword123",
-		Code:     code,
+		Password: "NewPassword123!",
+		Code:     wrongCode,
 	}
 
 	resp, err := logic.ResetPassword(req)
@@ -149,7 +149,7 @@ func TestResetPasswordLogic_ResetPassword_CodeExpired(t *testing.T) {
 	// 执行测试（redis 中没有验证码）
 	req := &types.ResetPasswordReq{
 		Email:    email,
-		Password: "newpassword123",
+		Password: "NewPassword123!",
 		Code:     "123456",
 	}
 
@@ -181,7 +181,7 @@ func TestResetPasswordLogic_ResetPassword_CodeAlreadyUsed(t *testing.T) {
 	// 执行测试
 	req := &types.ResetPasswordReq{
 		Email:    email,
-		Password: "newpassword123",
+		Password: "NewPassword123!",
 		Code:     code,
 	}
 
@@ -216,7 +216,7 @@ func TestResetPasswordLogic_ResetPassword_UserNotFound(t *testing.T) {
 	// 执行测试
 	req := &types.ResetPasswordReq{
 		Email:    email,
-		Password: "newpassword123",
+		Password: "NewPassword123!",
 		Code:     code,
 	}
 
@@ -229,7 +229,8 @@ func TestResetPasswordLogic_ResetPassword_UserNotFound(t *testing.T) {
 	mockUsersModel.AssertExpectations(t)
 }
 
-func TestResetPasswordLogic_ResetPassword_FindUserError(t *testing.T) {
+// TestResetPasswordLogic_ResetPassword_WeakPassword 测试密码强度不足
+func TestResetPasswordLogic_ResetPassword_WeakPassword(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupResetPasswordTest(t)
 	defer s.Close()
 
@@ -239,6 +240,7 @@ func TestResetPasswordLogic_ResetPassword_FindUserError(t *testing.T) {
 	// 准备测试数据
 	email := "test@example.com"
 	code := "123456"
+	weakPassword := "weak"
 
 	// 在 redis 中设置验证码
 	key := "account:reset_password:verify:" + email
@@ -246,13 +248,20 @@ func TestResetPasswordLogic_ResetPassword_FindUserError(t *testing.T) {
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
 
-	// 设置 mock 期望 - 数据库查询错误
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, errors.New("database connection failed"))
+	// 设置 mock 期望 - 用户存在
+	existingUser := &model.Users{
+		Id:           1,
+		SnowflakeId:  123456789,
+		Email:        email,
+		Nickname:     "testuser",
+		PasswordHash: "oldhashedpassword",
+	}
+	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
 
-	// 执行测试
+	// 执行测试 - 使用弱密码
 	req := &types.ResetPasswordReq{
 		Email:    email,
-		Password: "newpassword123",
+		Password: weakPassword,
 		Code:     code,
 	}
 
@@ -261,7 +270,7 @@ func TestResetPasswordLogic_ResetPassword_FindUserError(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -275,7 +284,7 @@ func TestResetPasswordLogic_ResetPassword_UpdateFailed(t *testing.T) {
 	// 准备测试数据
 	email := "test@example.com"
 	code := "123456"
-	newPassword := "newpassword123"
+	newPassword := "NewPassword123!"
 
 	// 在 redis 中设置验证码
 	key := "account:reset_password:verify:" + email
@@ -292,7 +301,7 @@ func TestResetPasswordLogic_ResetPassword_UpdateFailed(t *testing.T) {
 		PasswordHash: "oldhashedpassword",
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(errors.New("update failed"))
+	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(assert.AnError)
 
 	// 执行测试
 	req := &types.ResetPasswordReq{

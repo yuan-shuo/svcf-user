@@ -35,6 +35,15 @@ func verifyPassword(hashedPassword, password, email string, mismatchErrHint erro
 	return nil
 }
 
+// ValidatePasswordStrength 校验密码强度
+// 封装 utils.ValidatePassword，将普通错误转换为业务错误码
+func ValidatePasswordStrength(password string) error {
+	if err := utils.ValidatePassword(password); err != nil {
+		return errs.New(errs.CodeWeakPassword)
+	}
+	return nil
+}
+
 // HashPassword 密码加密
 func HashPassword(email, password string) (string, error) {
 	hashedPassword, err := utils.HashPassword(password)
@@ -106,6 +115,11 @@ func GetUserByEmail(ctx context.Context, svcCtx *svc.ServiceContext, email strin
 
 // resetUserPassword 重置用户密码
 func ResetUserPassword(ctx context.Context, svcCtx *svc.ServiceContext, user *model.Users, newPassword string) error {
+	// 校验密码强度
+	if err := ValidatePasswordStrength(newPassword); err != nil {
+		return err
+	}
+
 	// 检查新密码是否与旧密码相同
 	if err := utils.ComparePassword(user.PasswordHash, newPassword); err == nil {
 		return errs.New(errs.CodePasswordSameAsOld)

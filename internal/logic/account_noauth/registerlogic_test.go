@@ -67,7 +67,7 @@ func TestRegisterLogic_Register_Success(t *testing.T) {
 	email := "test@example.com"
 	code := "123456"
 	nickname := "testuser"
-	password := "password123"
+	password := "StrongPass123!"
 
 	// 在 redis 中设置验证码
 	key := "account:register:verify:" + email
@@ -120,7 +120,7 @@ func TestRegisterLogic_Register_InvalidCode(t *testing.T) {
 	// 执行测试
 	req := &types.RegisterReq{
 		Email:    email,
-		Password: "password123",
+		Password: "StrongPass123!",
 		Code:     code,
 		Nickname: "testuser",
 	}
@@ -146,7 +146,7 @@ func TestRegisterLogic_Register_CodeExpired(t *testing.T) {
 	// 执行测试（redis 中没有验证码）
 	req := &types.RegisterReq{
 		Email:    email,
-		Password: "password123",
+		Password: "StrongPass123!",
 		Code:     "123456",
 		Nickname: "testuser",
 	}
@@ -179,7 +179,7 @@ func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
 	// 执行测试
 	req := &types.RegisterReq{
 		Email:    email,
-		Password: "password123",
+		Password: "StrongPass123!",
 		Code:     code,
 		Nickname: "testuser",
 	}
@@ -222,7 +222,7 @@ func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
 	// 执行测试
 	req := &types.RegisterReq{
 		Email:    email,
-		Password: "password123",
+		Password: "StrongPass123!",
 		Code:     code,
 		Nickname: "testuser",
 	}
@@ -233,6 +233,44 @@ func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.True(t, mock.IsCodeError(err, errs.CodeEmailRegistered), "应该是邮箱已注册错误")
+	mockUsersModel.AssertExpectations(t)
+}
+
+// TestRegisterLogic_Register_WeakPassword 测试密码强度不足
+func TestRegisterLogic_Register_WeakPassword(t *testing.T) {
+	s, _, mockUsersModel, svcCtx := setupRegisterTest(t)
+	defer s.Close()
+
+	ctx := context.Background()
+	logic := NewRegisterLogic(ctx, svcCtx)
+
+	// 准备测试数据
+	email := "test@example.com"
+	code := "123456"
+
+	// 在 redis 中设置验证码
+	key := "account:register:verify:" + email
+	s.HSet(key, "code", code)
+	s.HSet(key, "used", "0")
+	s.SetTTL(key, 5*time.Minute)
+
+	// 设置 mock 期望 - 邮箱未注册
+	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
+
+	// 执行测试 - 使用弱密码
+	req := &types.RegisterReq{
+		Email:    email,
+		Password: "weak",
+		Code:     code,
+		Nickname: "testuser",
+	}
+
+	resp, err := logic.Register(req)
+
+	// 验证结果
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
 	mockUsersModel.AssertExpectations(t)
 }
 
@@ -259,7 +297,7 @@ func TestRegisterLogic_Register_DatabaseError(t *testing.T) {
 	// 执行测试
 	req := &types.RegisterReq{
 		Email:    email,
-		Password: "password123",
+		Password: "StrongPass123!",
 		Code:     code,
 		Nickname: "testuser",
 	}
@@ -297,7 +335,7 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	// 执行测试
 	req := &types.RegisterReq{
 		Email:    email,
-		Password: "password123",
+		Password: "StrongPass123!",
 		Code:     code,
 		Nickname: "testuser",
 	}
@@ -384,9 +422,10 @@ func TestRegisterLogic_checkIfEmailHasBeenRegistered_Found(t *testing.T) {
 	// 设置 mock 期望 - 找到已存在的用户
 	existingUser := &model.Users{
 		Id:           1,
+		SnowflakeId:  123456789,
 		Email:        email,
 		Nickname:     "existing",
-		PasswordHash: "hashed",
+		PasswordHash: "hashedpassword",
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
 
