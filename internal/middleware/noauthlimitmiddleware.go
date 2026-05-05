@@ -4,38 +4,24 @@
 package middleware
 
 import (
-	"encoding/json"
-	"net/http"
-	"user/internal/errs"
+	"context"
+	"user/internal/middleware/limiter"
 
 	"github.com/zeromicro/go-zero/core/limit"
 	"github.com/zeromicro/go-zero/rest"
-	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
-func NewNoAuthLimitMiddleware(limiter *limit.PeriodLimit) rest.Middleware {
-	return func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			// 使用客户端IP作为限流key，优先从X-Forwarded-For获取但会验证可信度
-			key := httpx.GetRemoteAddr(r)
-
-			// 限流检查
-			code, err := limiter.TakeCtx(r.Context(), key)
-			if err != nil || code == limit.OverQuota {
-				w.Header().Set("Content-Type", "application/json")
-
-				// 使用统一的错误处理
-				e := errs.New(errs.CodeTooManyRequests)
-				w.WriteHeader(e.JudgeErrsStatus())
-
-				resp := errs.CodeErrorResponse{
-					Code: e.Code,
-					Msg:  e.Msg,
-				}
-				json.NewEncoder(w).Encode(resp)
-				return
-			}
-			next(w, r)
-		}
-	}
+// NewNoAuthLimitMiddleware 创建无认证接口限流中间件
+func NewNoAuthLimitMiddleware(limiterMgr *limiter.PeriodLimiterManager) rest.Middleware {
+	return limiter.CreateLimitMiddleware(func(ctx context.Context, key string) (bool, error) {
+		periodLimiter := limiterMgr.GetLimiter(
+			"noauth",
+			key,
+			limiterMgr.Config.RateLimit.NoAuth.Period,
+			limiterMgr.Config.RateLimit.NoAuth.Quota,
+		)
+		// TakeCtx 的 key 参数传空字符串，因为 keyPrefix 已经包含了完整的标识
+		code, err := periodLimiter.TakeCtx(ctx, "")
+		return err == nil && code != limit.OverQuota, err
+	})
 }
