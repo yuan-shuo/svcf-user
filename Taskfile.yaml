@@ -1,76 +1,83 @@
-# # 目前只是随手写的估计都不对，后面改
-# # 下载 go-task: https://github.com/go-task/task/releases
-# # 为啥用 go-task?: 这玩意可比 make 好多了感觉...
+version: '3'
 
-# version: '3'
+vars:
+  HARBOR: harbor.aityp.com
+  PROJECT: myproject
+  VERSION:
+    sh: git describe --tags --always --dirty 2>nul || echo dev-$(Get-Date -Format yyyyMMdd-HHmmss)
 
-# env:
-#   HARBOR: harbor.aityp.com
-#   PROJECT: myproject
-#   VERSION:
-#     sh: git describe --tags --always --dirty 2>/dev/null || echo "dev-$(date +%Y%m%d-%H%M%S)"
+env:
+  GOOS: linux
+  GOARCH: amd64
+  CGO_ENABLED: "0"
 
-# tasks:
-#   # 默认任务：编译所有服务
-#   default:
-#     deps: [build-all]
+silent: true
 
-#   # 编译所有
-#   build-all:
-#     deps: [build-api, build-consumer]
+tasks:
+  default:
+    desc: 默认任务：编译所有服务并打包 Docker 镜像
+    deps: [docker-build-all]
 
-#   # 编译 user-api（自动处理 Windows/Linux）
-#   build-api:
-#     internal: true
-#     cmds:
-#       - |
-#         cd user-api
-#         GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
-#           -ldflags="-s -w" \
-#           -o bin/user-api .
-#     generates:
-#       - user-api/bin/user-api
+  build-all:
+    desc: 编译所有二进制
+    deps: [build-api, build-migrate, build-mqs]
 
-#   # 编译 user-consumer
-#   build-consumer:
-#     internal: true
-#     cmds:
-#       - |
-#         cd user-consumer
-#         GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
-#           -ldflags="-s -w" \
-#           -o bin/user-consumer .
-#     generates:
-#       - user-consumer/bin/user-consumer
+  build-api:
+    desc: 编译 user-api 二进制
+    cmds:
+      - go build -ldflags="-s -w" -o bin/user-api .
+    generates:
+      - bin/user-api
 
-#   # 打包镜像（依赖编译产物）
-#   docker-build:
-#     deps: [build-all]
-#     cmds:
-#       - docker build -t {{.HARBOR}}/{{.PROJECT}}/user-api:{{.VERSION}} -f user-api/Dockerfile user-api/
-#       - docker build -t {{.HARBOR}}/{{.PROJECT}}/user-consumer:{{.VERSION}} -f user-consumer/Dockerfile user-consumer/
-#       - echo "Built version: {{.VERSION}}
+  build-migrate:
+    desc: 编译 user-migrate 二进制
+    cmds:
+      - go build -ldflags="-s -w" -o bin/user-migrate ./cmd/migrate
+    generates:
+      - bin/user-migrate
 
-#   # 推送镜像
-#   docker-push:
-#     deps: [docker-build]
-#     cmds:
-#       - docker push {{.HARBOR}}/{{.PROJECT}}/user-api:{{.VERSION}}
-#       - docker push {{.HARBOR}}/{{.PROJECT}}/user-consumer:{{.VERSION}}
+  build-mqs:
+    desc: 编译 user-mqs 二进制
+    cmds:
+      - go build -ldflags="-s -w" -o bin/user-mqs ./cmd/mqs
+    generates:
+      - bin/user-mqs
 
-#   # 本地部署（docker-compose 替换版本号）
-#   deploy-local:
-#     deps: [docker-build]
-#     cmds:
-#       - export API_VERSION={{.VERSION}} && export CONSUMER_VERSION={{.VERSION}} && docker compose up -d
+  docker-build-all:
+    desc: 编译所有二进制并打包为 Docker 镜像
+    deps: [build-all]
+    cmds:
+      - task: docker-build-api
+      - task: docker-build-migrate
+      - task: docker-build-mqs
 
-#   # 一条龙：编译 → 打包 → 推送 → 部署
-#   release:
-#     deps: [docker-push, deploy-local]
-#     cmds:
-#       - echo "Released {{.VERSION}}"
+  docker-build-api:
+    desc: 打包 user-api Docker 镜像
+    deps: [build-api]
+    cmds:
+      - docker build -t {{.HARBOR}}/{{.PROJECT}}/user-api:{{.VERSION}} -f dockerfiles/api.Dockerfile .
 
-#   # 查看当前版本
-#   version:
-#     cmds:
-#       - echo "Current version: {{.VERSION}}
+  docker-build-migrate:
+    desc: 打包 user-migrate Docker 镜像
+    deps: [build-migrate]
+    cmds:
+      - docker build -t {{.HARBOR}}/{{.PROJECT}}/user-migrate:{{.VERSION}} -f dockerfiles/migrate.Dockerfile .
+
+  docker-build-mqs:
+    desc: 打包 user-mqs Docker 镜像
+    deps: [build-mqs]
+    cmds:
+      - docker build -t {{.HARBOR}}/{{.PROJECT}}/user-mqs:{{.VERSION}} -f dockerfiles/mqs.Dockerfile .
+
+  docker-push-all:
+    desc: 推送所有镜像到仓库
+    deps: [docker-build-all]
+    cmds:
+      - docker push {{.HARBOR}}/{{.PROJECT}}/user-api:{{.VERSION}}
+      - docker push {{.HARBOR}}/{{.PROJECT}}/user-migrate:{{.VERSION}}
+      - docker push {{.HARBOR}}/{{.PROJECT}}/user-mqs:{{.VERSION}}
+
+  version:
+    desc: 查看当前版本号
+    cmds:
+      - echo {{.VERSION}}
