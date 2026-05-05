@@ -60,7 +60,7 @@ jobs:
           ${{ runner.os }}-go-
 
     - name: Download dependencies
-      run: go mod download   
+      run: go mod download
 
     - name: Create config file from template
       run: |
@@ -71,13 +71,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y postgresql-client
-
-    - name: Install golang-migrate
-      run: |
-        curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz | tar xvz
-        sudo mv migrate /usr/local/bin/
-        migrate -version
-        echo "golang-migrate installed"
 
     - name: Run database migrations
       run: |
