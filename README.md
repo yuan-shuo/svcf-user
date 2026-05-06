@@ -1,16 +1,20 @@
 # svcf-user
+
 microservice frame of user function: 用户微服务框架
 
 [![CI](https://github.com/yuan-shuo/svcf-user/workflows/CI/badge.svg)](https://github.com/yuan-shuo/svcf-user/actions) [![codecov](https://codecov.io/github/yuan-shuo/svcf-user/graph/badge.svg?token=KB7HJSKVPT)](https://codecov.io/github/yuan-shuo/svcf-user)
 
 ## 更新计划
 
-1. 限流
-1. 可能存在的优化
+1. 统一日志处理
+2. 指标
+3. 错误处理
+4. 文档
+5. 可能存在的优化
 
 ## 核心模块
 
-1. (svc) user.go 用户系统微服务 
+1. (svc) user.go 用户系统微服务
 2. (svc) cmd/mqs 微服务消费者
 3. (job) cmd/migrate 数据库迁移工具
 
