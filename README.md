@@ -11,7 +11,6 @@ microservice frame of user function: 用户微服务框架
 3. 错误处理
 4. 文档
 5. 可能存在的优化
-6. 卡顿(速率优化)
 
 ## 核心模块
 
