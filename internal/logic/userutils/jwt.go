@@ -11,7 +11,7 @@ import (
 )
 
 // GetUserByAccessTokenClaims 从 accessToken claims 中获取用户实例
-func GetUserByAccessTokenClaims(ctx context.Context, usersModel UsersModelInterface) (*model.Users, error) {
+func GetUserByAccessTokenClaims(ctx context.Context, usersModel model.UsersModel) (*model.Users, error) {
 	uid, err := utils.UIDFromAccessToken(ctx)
 	if err != nil {
 		logx.Errorf("从 accessToken claims 中提取用户ID失败, err=%v", err)
@@ -22,7 +22,7 @@ func GetUserByAccessTokenClaims(ctx context.Context, usersModel UsersModelInterf
 }
 
 // GetUserByRefreshTokenClaims 从 refreshToken claims 中获取用户实例
-func GetUserByRefreshTokenClaims(ctx context.Context, usersModel UsersModelInterface) (*model.Users, error) {
+func GetUserByRefreshTokenClaims(ctx context.Context, usersModel model.UsersModel) (*model.Users, error) {
 	uid, err := utils.UIDFromRefreshToken(ctx)
 	if err != nil {
 		logx.Errorf("从 refreshToken claims 中提取用户ID失败, err=%v", err)
@@ -32,7 +32,7 @@ func GetUserByRefreshTokenClaims(ctx context.Context, usersModel UsersModelInter
 	return GetUserByUid(ctx, usersModel, uid)
 }
 
-func GetUserByRefreshToken(ctx context.Context, usersModel UsersModelInterface, rtBase64 string, refreshSecret string) (*model.Users, error) {
+func GetUserByRefreshToken(ctx context.Context, usersModel model.UsersModel, rtBase64 string, refreshSecret string) (*model.Users, error) {
 	rt, err := utils.ParseRefreshToken(rtBase64, refreshSecret)
 	if err != nil {
 		logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
@@ -67,16 +67,6 @@ func GetRefreshTokenClaimsByJWT(tokenString, secret string) (*utils.RefreshToken
 	}
 	return refreshToken, nil
 }
-
-// // 校验rt是否正确
-// func IsTokenTypeEqualToRefreshToken(claims jwt.MapClaims) error {
-// 	err := utils.IsRefreshToken(claims)
-// 	if err != nil {
-// 		logx.Errorf("校验 JWT.tokenType 是否为 refreshToken 失败, err=%v", err)
-// 		return errs.New(errs.CodeInvalidToken)
-// 	}
-// 	return nil
-// }
 
 // GetEmailByJwtCtx 从上下文获取用户邮箱
 func GetEmailByJwtCtx(ctx context.Context) (string, error) {

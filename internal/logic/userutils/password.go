@@ -57,7 +57,7 @@ func HashPassword(email, password string) (string, error) {
 }
 
 // ResetUserPassword 重置用户密码
-func ResetUserPasswordByEmail(ctx context.Context, usersModel UsersModelInterface, email, newPassword string) error {
+func ResetUserPasswordByEmail(ctx context.Context, usersModel model.UsersModel, email, newPassword string) error {
 	// 获取用户
 	user, err := GetUserByEmail(ctx, usersModel, email)
 	if err != nil {
@@ -68,7 +68,7 @@ func ResetUserPasswordByEmail(ctx context.Context, usersModel UsersModelInterfac
 }
 
 // GetUserByUid 获取用户实例
-func GetUserByUid(ctx context.Context, usersModel UsersModelInterface, uid int64) (*model.Users, error) {
+func GetUserByUid(ctx context.Context, usersModel model.UsersModel, uid int64) (*model.Users, error) {
 	user, err := usersModel.FindOneBySnowflakeId(ctx, uid)
 	if err != nil {
 		if err == model.ErrNotFound {
@@ -81,7 +81,7 @@ func GetUserByUid(ctx context.Context, usersModel UsersModelInterface, uid int64
 }
 
 // GetUserByAccessTokenJwtCtx 获取用户实例
-func GetUserByAccessJwtCtx(ctx context.Context, usersModel UsersModelInterface) (*model.Users, error) {
+func GetUserByAccessJwtCtx(ctx context.Context, usersModel model.UsersModel) (*model.Users, error) {
 	uid, err := utils.UIDFromAccessToken(ctx)
 	if err != nil {
 		logx.Errorf("从JWT中提取用户ID失败, err=%v", err)
@@ -91,7 +91,7 @@ func GetUserByAccessJwtCtx(ctx context.Context, usersModel UsersModelInterface) 
 }
 
 // GetUserByRefreshTokenJwtCtx 获取用户实例
-func GetUserByRefreshJwtCtx(ctx context.Context, usersModel UsersModelInterface) (*model.Users, error) {
+func GetUserByRefreshJwtCtx(ctx context.Context, usersModel model.UsersModel) (*model.Users, error) {
 	uid, err := utils.UIDFromRefreshToken(ctx)
 	if err != nil {
 		logx.Errorf("从JWT中提取用户ID失败, err=%v", err)
@@ -101,7 +101,7 @@ func GetUserByRefreshJwtCtx(ctx context.Context, usersModel UsersModelInterface)
 }
 
 // GetUserByEmail 获取用户实例
-func GetUserByEmail(ctx context.Context, usersModel UsersModelInterface, email string) (*model.Users, error) {
+func GetUserByEmail(ctx context.Context, usersModel model.UsersModel, email string) (*model.Users, error) {
 	user, err := usersModel.FindOneByEmail(ctx, email)
 	if err != nil {
 		if err == model.ErrNotFound {
@@ -114,7 +114,7 @@ func GetUserByEmail(ctx context.Context, usersModel UsersModelInterface, email s
 }
 
 // CheckEmailNotRegistered 检查邮箱未被注册（用于注册）
-func CheckEmailNotRegistered(ctx context.Context, usersModel UsersModelInterface, email string) error {
+func CheckEmailNotRegistered(ctx context.Context, usersModel model.UsersModel, email string) error {
 	_, err := usersModel.FindOneByEmail(ctx, email)
 	if err == nil {
 		// 邮箱已存在
@@ -130,7 +130,7 @@ func CheckEmailNotRegistered(ctx context.Context, usersModel UsersModelInterface
 }
 
 // CreateUser 创建用户
-func CreateUser(ctx context.Context, usersModel UsersModelInterface, nickname, email, hashedPassword string) error {
+func CreateUser(ctx context.Context, usersModel model.UsersModel, nickname, email, hashedPassword string) error {
 	snowflakeId, err := utils.GenerateID()
 	if err != nil {
 		logx.Errorf("雪花id生成失败, email=%s, err=%v", email, err)
@@ -151,7 +151,7 @@ func CreateUser(ctx context.Context, usersModel UsersModelInterface, nickname, e
 }
 
 // resetUserPassword 重置用户密码
-func ResetUserPassword(ctx context.Context, usersModel UsersModelInterface, user *model.Users, newPassword string) error {
+func ResetUserPassword(ctx context.Context, usersModel model.UsersModel, user *model.Users, newPassword string) error {
 	// 校验密码强度
 	if err := ValidatePasswordStrength(newPassword); err != nil {
 		return err

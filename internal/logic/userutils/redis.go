@@ -7,6 +7,7 @@ import (
 	"user/internal/errs"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // buildBaseKey 构建基础 key
@@ -28,7 +29,7 @@ func BuildLimitKey(email string, codeType string) string {
 }
 
 // VerifyEmailAndCodeInRedis 检查验证码是否属于对应邮箱以及是否正确
-func VerifyEmailAndCodeInRedis(ctx context.Context, redisClient RedisInterface, email string, code string, codeType string) error {
+func VerifyEmailAndCodeInRedis(ctx context.Context, redisClient *redis.Redis, email string, code string, codeType string) error {
 	key := BuildVerifyKey(email, codeType)
 
 	// 一次获取所有字段（Hgetall）
@@ -57,7 +58,7 @@ func VerifyEmailAndCodeInRedis(ctx context.Context, redisClient RedisInterface, 
 }
 
 // MarkCodeAsUsed 标记验证码为已使用
-func MarkCodeAsUsed(ctx context.Context, redisClient RedisInterface, email string, codeType string) {
+func MarkCodeAsUsed(ctx context.Context, redisClient *redis.Redis, email string, codeType string) {
 	key := BuildVerifyKey(email, codeType)
 	if err := redisClient.HsetCtx(ctx, key, RedisValueUsedFieldName, "1"); err != nil {
 		logx.Errorf("标记验证码已使用失败, email=%s, key=%s, err=%v", email, key, err)
