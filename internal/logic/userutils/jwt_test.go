@@ -443,3 +443,60 @@ func TestGenerateRefreshToken_Wrapper_Success(t *testing.T) {
 	uid, _ := claims.GetUID()
 	assert.Equal(t, int64(12345), uid)
 }
+
+// ==================== GetUserByRefreshTokenClaims 测试 - 补充错误场景 ====================
+
+func TestGetUserByRefreshTokenClaims_UserNotFound(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "refresh")
+
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, model.ErrNotFound)
+
+	user, err := GetUserByRefreshTokenClaims(ctx, svcCtx.UsersModel)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotFound), "应该是用户不存在错误")
+	mockUsersModel.AssertExpectations(t)
+}
+
+func TestGetUserByRefreshTokenClaims_DBError(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
+	ctx = context.WithValue(ctx, "version", "1.0")
+	ctx = context.WithValue(ctx, "type", "refresh")
+
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, assert.AnError)
+
+	user, err := GetUserByRefreshTokenClaims(ctx, svcCtx.UsersModel)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	mockUsersModel.AssertExpectations(t)
+}
+
+// ==================== GetUserByRefreshToken 测试 - 补充错误场景 ====================
+
+func TestGetUserByRefreshToken_DBError(t *testing.T) {
+	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
+
+	rt, err := utils.GenerateRefreshToken(svcCtx.Config.RefreshSecret, svcCtx.Config.RefreshExpire, 12345)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, assert.AnError)
+
+	user, err := GetUserByRefreshToken(ctx, svcCtx.UsersModel, rt, svcCtx.Config.RefreshSecret)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
+	mockUsersModel.AssertExpectations(t)
+}
