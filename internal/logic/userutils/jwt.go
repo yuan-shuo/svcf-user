@@ -5,36 +5,35 @@ import (
 	"user/internal/config"
 	"user/internal/errs"
 	"user/internal/model"
-	"user/internal/svc"
 	"user/internal/utils"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // GetUserByAccessTokenClaims 从 accessToken claims 中获取用户实例
-func GetUserByAccessTokenClaims(ctx context.Context, svcCtx *svc.ServiceContext) (*model.Users, error) {
+func GetUserByAccessTokenClaims(ctx context.Context, usersModel UsersModelInterface) (*model.Users, error) {
 	uid, err := utils.UIDFromAccessToken(ctx)
 	if err != nil {
 		logx.Errorf("从 accessToken claims 中提取用户ID失败, err=%v", err)
 		return nil, errs.New(errs.CodeInternalError)
 	}
 
-	return GetUserByUid(ctx, svcCtx, uid)
+	return GetUserByUid(ctx, usersModel, uid)
 }
 
 // GetUserByRefreshTokenClaims 从 refreshToken claims 中获取用户实例
-func GetUserByRefreshTokenClaims(ctx context.Context, svcCtx *svc.ServiceContext) (*model.Users, error) {
+func GetUserByRefreshTokenClaims(ctx context.Context, usersModel UsersModelInterface) (*model.Users, error) {
 	uid, err := utils.UIDFromRefreshToken(ctx)
 	if err != nil {
 		logx.Errorf("从 refreshToken claims 中提取用户ID失败, err=%v", err)
 		return nil, errs.New(errs.CodeInternalError)
 	}
 
-	return GetUserByUid(ctx, svcCtx, uid)
+	return GetUserByUid(ctx, usersModel, uid)
 }
 
-func GetUserByRefreshToken(ctx context.Context, svcCtx *svc.ServiceContext, rtBase64 string) (*model.Users, error) {
-	rt, err := utils.ParseRefreshToken(rtBase64, svcCtx.Config.RefreshSecret)
+func GetUserByRefreshToken(ctx context.Context, usersModel UsersModelInterface, rtBase64 string, refreshSecret string) (*model.Users, error) {
+	rt, err := utils.ParseRefreshToken(rtBase64, refreshSecret)
 	if err != nil {
 		logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
 		return nil, errs.New(errs.CodeInvalidToken)
@@ -44,7 +43,7 @@ func GetUserByRefreshToken(ctx context.Context, svcCtx *svc.ServiceContext, rtBa
 		logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
 		return nil, errs.New(errs.CodeInvalidToken)
 	}
-	return GetUserByUid(ctx, svcCtx, uid)
+	return GetUserByUid(ctx, usersModel, uid)
 }
 
 // GetAccessTokenClaimsByJWT 从 JWT 中解析 accessToken claims

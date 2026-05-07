@@ -49,15 +49,15 @@ func setupChangePasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, 
 		Metrics:    mock.GetTestMetrics(),
 	}
 
-	// 初始化雪花算法
+	// 初始化雪花算�?
 	err := utils.InitSonyflake(1, "2024-01-01")
 	assert.NoError(t, err)
 
 	return s, rds, mockUsersModel, svcCtx
 }
 
-// createTestContextWithAccessToken 创建包含 AccessToken claims 的 context
-// 模拟 go-zero JWT 中间件将 claims 字段存入 context 的行为
+// createTestContextWithAccessToken 创建包含 AccessToken claims �?context
+// 模拟 go-zero JWT 中间件将 claims 字段存入 context 的行�?
 func createTestContextWithAccessToken(uid int64, email string) context.Context {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
@@ -72,7 +72,7 @@ func TestChangePasswordLogic_ChangePassword_Success(t *testing.T) {
 	s, _, mockUsersModel, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	// 准备 JWT 上下文
+	// 准备 JWT 上下�?
 	ctx := createTestContextWithAccessToken(12345, "test@example.com")
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)
@@ -83,11 +83,11 @@ func TestChangePasswordLogic_ChangePassword_Success(t *testing.T) {
 	oldPassword := "OldPassword123!"
 	newPassword := "NewPassword123!"
 
-	// 先生成旧密码的哈希
+	// 先生成旧密码的哈�?
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
 
-	// 在 redis 中设置验证码
-	key := "account:change_password:verify:" + email
+	// �?redis 中设置验证码
+	key := "user:change_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -136,8 +136,8 @@ func TestChangePasswordLogic_ChangePassword_InvalidCode(t *testing.T) {
 	oldPassword := "OldPassword123!"
 	newPassword := "NewPassword123!"
 
-	// 在 redis 中设置验证码
-	key := "account:change_password:verify:" + email
+	// �?redis 中设置验证码
+	key := "user:change_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -171,8 +171,8 @@ func TestChangePasswordLogic_ChangePassword_CodeAlreadyUsed(t *testing.T) {
 	oldPassword := "OldPassword123!"
 	newPassword := "NewPassword123!"
 
-	// 在 redis 中设置验证码 - 已使用
-	key := "account:change_password:verify:" + email
+	// �?redis 中设置验证码 - 已使�?
+	key := "user:change_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "1")
 	s.SetTTL(key, 5*time.Minute)
@@ -205,7 +205,7 @@ func TestChangePasswordLogic_ChangePassword_CodeNotFound(t *testing.T) {
 	oldPassword := "OldPassword123!"
 	newPassword := "NewPassword123!"
 
-	// 不设置验证码到 redis
+	// 不设置验证码�?redis
 
 	// 执行测试
 	req := &types.ChangePasswordReq{
@@ -236,13 +236,13 @@ func TestChangePasswordLogic_ChangePassword_UserNotFound(t *testing.T) {
 	oldPassword := "OldPassword123!"
 	newPassword := "NewPassword123!"
 
-	// 在 redis 中设置验证码
-	key := "account:change_password:verify:" + email
+	// �?redis 中设置验证码
+	key := "user:change_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
 
-	// 设置 mock 期望 - 用户不存在
+	// 设置 mock 期望 - 用户不存�?
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, sqlx.ErrNotFound)
 
 	// 执行测试
@@ -275,11 +275,11 @@ func TestChangePasswordLogic_ChangePassword_OldPasswordIncorrect(t *testing.T) {
 	wrongOldPassword := "WrongPassword123!"
 	newPassword := "NewPassword123!"
 
-	// 先生成旧密码的哈希
+	// 先生成旧密码的哈�?
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
 
-	// 在 redis 中设置验证码
-	key := "account:change_password:verify:" + email
+	// �?redis 中设置验证码
+	key := "user:change_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -322,11 +322,11 @@ func TestChangePasswordLogic_ChangePassword_SameAsOldPassword(t *testing.T) {
 	code := "123456"
 	oldPassword := "OldPassword123!"
 
-	// 先生成旧密码的哈希
+	// 先生成旧密码的哈�?
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
 
-	// 在 redis 中设置验证码
-	key := "account:change_password:verify:" + email
+	// �?redis 中设置验证码
+	key := "user:change_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -341,7 +341,7 @@ func TestChangePasswordLogic_ChangePassword_SameAsOldPassword(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
 
-	// 执行测试 - 新密码与旧密码相同
+	// 执行测试 - 新密码与旧密码相�?
 	req := &types.ChangePasswordReq{
 		OldPassword: oldPassword,
 		NewPassword: oldPassword,
@@ -371,11 +371,11 @@ func TestChangePasswordLogic_ChangePassword_WeakPassword(t *testing.T) {
 	oldPassword := "OldPassword123!"
 	weakNewPassword := "weak"
 
-	// 先生成旧密码的哈希
+	// 先生成旧密码的哈�?
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
 
-	// 在 redis 中设置验证码
-	key := "account:change_password:verify:" + email
+	// �?redis 中设置验证码
+	key := "user:change_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -390,7 +390,7 @@ func TestChangePasswordLogic_ChangePassword_WeakPassword(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
 
-	// 执行测试 - 使用弱密码
+	// 执行测试 - 使用弱密�?
 	req := &types.ChangePasswordReq{
 		OldPassword: oldPassword,
 		NewPassword: weakNewPassword,
@@ -419,11 +419,11 @@ func TestChangePasswordLogic_ChangePassword_UpdateFailed(t *testing.T) {
 	oldPassword := "OldPassword123!"
 	newPassword := "NewPassword123!"
 
-	// 先生成旧密码的哈希
+	// 先生成旧密码的哈�?
 	hashedOldPassword, _ := utils.HashPassword(oldPassword)
 
-	// 在 redis 中设置验证码
-	key := "account:change_password:verify:" + email
+	// �?redis 中设置验证码
+	key := "user:change_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -459,7 +459,7 @@ func TestChangePasswordLogic_ChangePassword_EmailNotInContext(t *testing.T) {
 	s, _, _, svcCtx := setupChangePasswordTest(t)
 	defer s.Close()
 
-	// 不设置 claims 到上下文
+	// 不设�?claims 到上下文
 	ctx := context.Background()
 
 	logic := NewChangePasswordLogic(ctx, svcCtx)

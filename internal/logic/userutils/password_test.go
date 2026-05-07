@@ -24,7 +24,7 @@ func setupPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.
 	// 创建 miniredis
 	s := miniredis.RunT(t)
 
-	// 创建 redis 客户端
+	// 创建 redis 客户�?
 	rds := redis.New(s.Addr())
 
 	// 创建 mock users model
@@ -47,7 +47,7 @@ func setupPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.
 		UsersModel: mockUsersModel,
 	}
 
-	// 初始化雪花算法
+	// 初始化雪花算�?
 	err := utils.InitSonyflake(1, "2024-01-01")
 	assert.NoError(t, err)
 
@@ -72,7 +72,7 @@ func TestHashPassword_EmptyPassword(t *testing.T) {
 	hashed, err := HashPassword(email, password)
 
 	assert.NoError(t, err)
-	assert.NotEmpty(t, hashed) // 空密码也应该能生成哈希
+	assert.NotEmpty(t, hashed) // 空密码也应该能生成哈�?
 }
 
 func TestResetUserPassword_Success(t *testing.T) {
@@ -94,8 +94,8 @@ func TestResetUserPassword_Success(t *testing.T) {
 	// 设置 Update mock 期望
 	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(nil)
 
-	// 直接使用 ResetUserPassword，传入 user 对象
-	err := ResetUserPassword(ctx, svcCtx, existingUser, newPassword)
+	// 直接使用 ResetUserPassword，传�?user 对象
+	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, newPassword)
 
 	assert.NoError(t, err)
 	// 验证密码已被更新
@@ -120,8 +120,8 @@ func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
 		PasswordHash: hashedOldPassword,
 	}
 
-	// 尝试使用相同的密码重置
-	err := ResetUserPassword(ctx, svcCtx, existingUser, oldPassword)
+	// 尝试使用相同的密码重�?
+	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, oldPassword)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
@@ -142,8 +142,8 @@ func TestResetUserPassword_WeakPassword(t *testing.T) {
 		PasswordHash: "oldhashedpassword",
 	}
 
-	// 尝试使用弱密码重置
-	err := ResetUserPassword(ctx, svcCtx, existingUser, weakPassword)
+	// 尝试使用弱密码重�?
+	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, weakPassword)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
@@ -167,7 +167,7 @@ func TestResetUserPasswordByEmail_Success(t *testing.T) {
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
 	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(nil)
 
-	err := ResetUserPasswordByEmail(ctx, svcCtx, email, newPassword)
+	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, newPassword)
 
 	assert.NoError(t, err)
 	mockUsersModel.AssertExpectations(t)
@@ -180,10 +180,10 @@ func TestResetUserPasswordByEmail_UserNotFound(t *testing.T) {
 	email := "test@example.com"
 	newPassword := "NewPassword123!"
 
-	// 设置 mock 期望 - 用户不存在
+	// 设置 mock 期望 - 用户不存�?
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
 
-	err := ResetUserPasswordByEmail(ctx, svcCtx, email, newPassword)
+	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, newPassword)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotFound), "应该是用户不存在错误")
@@ -195,7 +195,7 @@ func TestResetUserPasswordByEmail_WeakPassword(t *testing.T) {
 
 	ctx := context.Background()
 	email := "test@example.com"
-	weakPassword := "123" // 弱密码
+	weakPassword := "123" // 弱密�?
 
 	// 设置 mock 期望
 	existingUser := &model.Users{
@@ -207,7 +207,7 @@ func TestResetUserPasswordByEmail_WeakPassword(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
 
-	err := ResetUserPasswordByEmail(ctx, svcCtx, email, weakPassword)
+	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, weakPassword)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
@@ -228,7 +228,7 @@ func TestGetUserByEmail_Success(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(expectedUser, nil)
 
-	user, err := GetUserByEmail(ctx, svcCtx, email)
+	user, err := GetUserByEmail(ctx, svcCtx.UsersModel, email)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
@@ -244,7 +244,7 @@ func TestGetUserByEmail_NotFound(t *testing.T) {
 
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
 
-	user, err := GetUserByEmail(ctx, svcCtx, email)
+	user, err := GetUserByEmail(ctx, svcCtx.UsersModel, email)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -260,7 +260,7 @@ func TestGetUserByEmail_DatabaseError(t *testing.T) {
 
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, errors.New("database connection failed"))
 
-	user, err := GetUserByEmail(ctx, svcCtx, email)
+	user, err := GetUserByEmail(ctx, svcCtx.UsersModel, email)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -302,14 +302,14 @@ func TestVerifyPasswordWithOldPasswordMismatchErrHint_InvalidPassword(t *testing
 	assert.True(t, mock.IsCodeError(err, errs.CodeOldPasswordIncorrect), "应该是旧密码错误")
 }
 
-// TestValidatePasswordStrength_Success 测试密码强度校验 - 强密码
+// TestValidatePasswordStrength_Success 测试密码强度校验 - 强密�?
 func TestValidatePasswordStrength_Success(t *testing.T) {
 	password := "StrongPass123!"
 	err := ValidatePasswordStrength(password)
 	assert.NoError(t, err)
 }
 
-// TestValidatePasswordStrength_WeakPassword 测试密码强度校验 - 弱密码
+// TestValidatePasswordStrength_WeakPassword 测试密码强度校验 - 弱密�?
 func TestValidatePasswordStrength_WeakPassword(t *testing.T) {
 	tests := []struct {
 		name     string

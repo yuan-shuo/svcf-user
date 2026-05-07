@@ -29,7 +29,7 @@ func NewRefreshTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Refr
 
 func (l *RefreshTokenLogic) RefreshToken(req *types.RefreshTokenReq) (resp *types.RefreshTokenResp, err error) {
 	// 获取用户实例
-	user, err := userutils.GetUserByRefreshToken(l.ctx, l.svcCtx, req.RefreshToken)
+	user, err := userutils.GetUserByRefreshToken(l.ctx, l.svcCtx.UsersModel, req.RefreshToken, l.svcCtx.Config.RefreshSecret)
 	if err != nil {
 		l.svcCtx.Metrics.AccountNoauth.TokenRefreshesTotal.Inc("fail")
 		return nil, err

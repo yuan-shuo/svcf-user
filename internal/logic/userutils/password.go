@@ -2,14 +2,14 @@ package userutils
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"user/internal/errs"
-	"user/internal/svc"
+	"user/internal/model"
 	"user/internal/utils"
 
-	"user/internal/model"
-
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -57,19 +57,19 @@ func HashPassword(email, password string) (string, error) {
 }
 
 // ResetUserPassword 重置用户密码
-func ResetUserPasswordByEmail(ctx context.Context, svcCtx *svc.ServiceContext, email, newPassword string) error {
+func ResetUserPasswordByEmail(ctx context.Context, usersModel UsersModelInterface, email, newPassword string) error {
 	// 获取用户
-	user, err := GetUserByEmail(ctx, svcCtx, email)
+	user, err := GetUserByEmail(ctx, usersModel, email)
 	if err != nil {
 		return err
 	}
 
-	return ResetUserPassword(ctx, svcCtx, user, newPassword)
+	return ResetUserPassword(ctx, usersModel, user, newPassword)
 }
 
 // GetUserByUid 获取用户实例
-func GetUserByUid(ctx context.Context, svcCtx *svc.ServiceContext, uid int64) (*model.Users, error) {
-	user, err := svcCtx.UsersModel.FindOneBySnowflakeId(ctx, uid)
+func GetUserByUid(ctx context.Context, usersModel UsersModelInterface, uid int64) (*model.Users, error) {
+	user, err := usersModel.FindOneBySnowflakeId(ctx, uid)
 	if err != nil {
 		if err == model.ErrNotFound {
 			return nil, errs.New(errs.CodeUserNotFound)
@@ -81,28 +81,28 @@ func GetUserByUid(ctx context.Context, svcCtx *svc.ServiceContext, uid int64) (*
 }
 
 // GetUserByAccessTokenJwtCtx 获取用户实例
-func GetUserByAccessJwtCtx(ctx context.Context, svcCtx *svc.ServiceContext) (*model.Users, error) {
+func GetUserByAccessJwtCtx(ctx context.Context, usersModel UsersModelInterface) (*model.Users, error) {
 	uid, err := utils.UIDFromAccessToken(ctx)
 	if err != nil {
 		logx.Errorf("从JWT中提取用户ID失败, err=%v", err)
 		return nil, errs.New(errs.CodeInternalError)
 	}
-	return GetUserByUid(ctx, svcCtx, uid)
+	return GetUserByUid(ctx, usersModel, uid)
 }
 
 // GetUserByRefreshTokenJwtCtx 获取用户实例
-func GetUserByRefreshJwtCtx(ctx context.Context, svcCtx *svc.ServiceContext) (*model.Users, error) {
+func GetUserByRefreshJwtCtx(ctx context.Context, usersModel UsersModelInterface) (*model.Users, error) {
 	uid, err := utils.UIDFromRefreshToken(ctx)
 	if err != nil {
 		logx.Errorf("从JWT中提取用户ID失败, err=%v", err)
 		return nil, errs.New(errs.CodeInternalError)
 	}
-	return GetUserByUid(ctx, svcCtx, uid)
+	return GetUserByUid(ctx, usersModel, uid)
 }
 
-// getUserByEmail 获取用户实例
-func GetUserByEmail(ctx context.Context, svcCtx *svc.ServiceContext, email string) (*model.Users, error) {
-	user, err := svcCtx.UsersModel.FindOneByEmail(ctx, email)
+// GetUserByEmail 获取用户实例
+func GetUserByEmail(ctx context.Context, usersModel UsersModelInterface, email string) (*model.Users, error) {
+	user, err := usersModel.FindOneByEmail(ctx, email)
 	if err != nil {
 		if err == model.ErrNotFound {
 			return nil, errs.New(errs.CodeUserNotFound)
@@ -113,8 +113,45 @@ func GetUserByEmail(ctx context.Context, svcCtx *svc.ServiceContext, email strin
 	return user, nil
 }
 
+// CheckEmailNotRegistered 检查邮箱未被注册（用于注册）
+func CheckEmailNotRegistered(ctx context.Context, usersModel UsersModelInterface, email string) error {
+	_, err := usersModel.FindOneByEmail(ctx, email)
+	if err == nil {
+		// 邮箱已存在
+		return errs.New(errs.CodeEmailRegistered)
+	}
+	if err != sqlx.ErrNotFound {
+		// 数据库查询出错
+		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", email, err)
+		return errs.New(errs.CodeInternalError)
+	}
+	// 未找到，说明邮箱未注册
+	return nil
+}
+
+// CreateUser 创建用户
+func CreateUser(ctx context.Context, usersModel UsersModelInterface, nickname, email, hashedPassword string) error {
+	snowflakeId, err := utils.GenerateID()
+	if err != nil {
+		logx.Errorf("雪花id生成失败, email=%s, err=%v", email, err)
+		return errs.New(errs.CodeInternalError)
+	}
+	_, err = usersModel.Insert(ctx, &model.Users{
+		SnowflakeId:  snowflakeId,
+		Nickname:     nickname,
+		Email:        email,
+		PasswordHash: hashedPassword,
+		DeletedAt:    sql.NullTime{Valid: false},
+	})
+	if err != nil {
+		logx.Errorf("数据库创建用户失败, email=%s, err=%v", email, err)
+		return errs.New(errs.CodeInternalError)
+	}
+	return nil
+}
+
 // resetUserPassword 重置用户密码
-func ResetUserPassword(ctx context.Context, svcCtx *svc.ServiceContext, user *model.Users, newPassword string) error {
+func ResetUserPassword(ctx context.Context, usersModel UsersModelInterface, user *model.Users, newPassword string) error {
 	// 校验密码强度
 	if err := ValidatePasswordStrength(newPassword); err != nil {
 		return err
@@ -133,7 +170,7 @@ func ResetUserPassword(ctx context.Context, svcCtx *svc.ServiceContext, user *mo
 	// 重设密码
 	user.PasswordHash = newHashedPassword
 	// 更新数据库密码
-	if err := svcCtx.UsersModel.Update(ctx, user); err != nil {
+	if err := usersModel.Update(ctx, user); err != nil {
 		logx.Errorf("重设用户密码实败, email=%s, err=%v", user.Email, err)
 		return errs.New(errs.CodeInternalError)
 	}

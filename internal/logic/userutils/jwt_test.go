@@ -42,9 +42,6 @@ func setupJwtTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.Users
 					Register:      "register",
 					ResetPassword: "reset_password",
 				},
-				// Redis: config.VerifyCodeRedisConfig{
-				// 	KeyPrefix: "account",
-				// },
 			},
 		},
 		Redis:      rds,
@@ -80,7 +77,7 @@ func TestGetUserByAccessTokenClaims_Success(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
 
-	user, err := GetUserByAccessTokenClaims(ctx, svcCtx)
+	user, err := GetUserByAccessTokenClaims(ctx, svcCtx.UsersModel)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
@@ -93,7 +90,7 @@ func TestGetUserByAccessTokenClaims_ClaimsNotFound(t *testing.T) {
 
 	ctx := context.Background()
 
-	user, err := GetUserByAccessTokenClaims(ctx, svcCtx)
+	user, err := GetUserByAccessTokenClaims(ctx, svcCtx.UsersModel)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -112,7 +109,7 @@ func TestGetUserByAccessTokenClaims_UserNotFound(t *testing.T) {
 
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, model.ErrNotFound)
 
-	user, err := GetUserByAccessTokenClaims(ctx, svcCtx)
+	user, err := GetUserByAccessTokenClaims(ctx, svcCtx.UsersModel)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -132,7 +129,7 @@ func TestGetUserByAccessTokenClaims_DBError(t *testing.T) {
 
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, assert.AnError)
 
-	user, err := GetUserByAccessTokenClaims(ctx, svcCtx)
+	user, err := GetUserByAccessTokenClaims(ctx, svcCtx.UsersModel)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -159,7 +156,7 @@ func TestGetUserByRefreshTokenClaims_Success(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
 
-	user, err := GetUserByRefreshTokenClaims(ctx, svcCtx)
+	user, err := GetUserByRefreshTokenClaims(ctx, svcCtx.UsersModel)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
@@ -172,7 +169,7 @@ func TestGetUserByRefreshTokenClaims_ClaimsNotFound(t *testing.T) {
 
 	ctx := context.Background()
 
-	user, err := GetUserByRefreshTokenClaims(ctx, svcCtx)
+	user, err := GetUserByRefreshTokenClaims(ctx, svcCtx.UsersModel)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -198,7 +195,7 @@ func TestGetUserByRefreshToken_Success(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
 
-	user, err := GetUserByRefreshToken(ctx, svcCtx, rt)
+	user, err := GetUserByRefreshToken(ctx, svcCtx.UsersModel, rt, svcCtx.Config.RefreshSecret)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, user)
@@ -211,7 +208,7 @@ func TestGetUserByRefreshToken_InvalidToken(t *testing.T) {
 
 	ctx := context.Background()
 
-	user, err := GetUserByRefreshToken(ctx, svcCtx, "invalid-token")
+	user, err := GetUserByRefreshToken(ctx, svcCtx.UsersModel, "invalid-token", svcCtx.Config.RefreshSecret)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -221,13 +218,13 @@ func TestGetUserByRefreshToken_InvalidToken(t *testing.T) {
 func TestGetUserByRefreshToken_WrongSecret(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
 
-	// 使用错误的密钥生成 token
+	// 使用错误的密钥生成token
 	rt, err := utils.GenerateRefreshToken("wrong-secret", svcCtx.Config.RefreshExpire, 12345)
 	assert.NoError(t, err)
 
 	ctx := context.Background()
 
-	user, err := GetUserByRefreshToken(ctx, svcCtx, rt)
+	user, err := GetUserByRefreshToken(ctx, svcCtx.UsersModel, rt, svcCtx.Config.RefreshSecret)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -243,7 +240,7 @@ func TestGetUserByRefreshToken_UserNotFound(t *testing.T) {
 	ctx := context.Background()
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(nil, model.ErrNotFound)
 
-	user, err := GetUserByRefreshToken(ctx, svcCtx, rt)
+	user, err := GetUserByRefreshToken(ctx, svcCtx.UsersModel, rt, svcCtx.Config.RefreshSecret)
 
 	assert.Error(t, err)
 	assert.Nil(t, user)
@@ -445,84 +442,4 @@ func TestGenerateRefreshToken_Wrapper_Success(t *testing.T) {
 	assert.NoError(t, err)
 	uid, _ := claims.GetUID()
 	assert.Equal(t, int64(12345), uid)
-}
-
-// ==================== GetUserByAccessJwtCtx 测试 ====================
-
-func TestGetUserByAccessJwtCtx_Success(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
-	ctx = context.WithValue(ctx, "version", "1.0")
-	ctx = context.WithValue(ctx, "type", "access")
-	ctx = context.WithValue(ctx, "nickname", "testuser")
-	ctx = context.WithValue(ctx, "email", "test@example.com")
-
-	expectedUser := &model.Users{
-		Id:           1,
-		SnowflakeId:  12345,
-		Email:        "test@example.com",
-		Nickname:     "testuser",
-		PasswordHash: "hashedpassword",
-	}
-	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
-
-	user, err := GetUserByAccessJwtCtx(ctx, svcCtx)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, user)
-	assert.Equal(t, int64(12345), user.SnowflakeId)
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestGetUserByAccessJwtCtx_ClaimsNotFound(t *testing.T) {
-	_, _, _, svcCtx := setupJwtTest(t)
-
-	ctx := context.Background()
-
-	user, err := GetUserByAccessJwtCtx(ctx, svcCtx)
-
-	assert.Error(t, err)
-	assert.Nil(t, user)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-}
-
-// ==================== GetUserByRefreshJwtCtx 测试 ====================
-
-func TestGetUserByRefreshJwtCtx_Success(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupJwtTest(t)
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
-	ctx = context.WithValue(ctx, "version", "1.0")
-	ctx = context.WithValue(ctx, "type", "refresh")
-
-	expectedUser := &model.Users{
-		Id:           1,
-		SnowflakeId:  12345,
-		Email:        "test@example.com",
-		Nickname:     "testuser",
-		PasswordHash: "hashedpassword",
-	}
-	mockUsersModel.On("FindOneBySnowflakeId", ctx, int64(12345)).Return(expectedUser, nil)
-
-	user, err := GetUserByRefreshJwtCtx(ctx, svcCtx)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, user)
-	assert.Equal(t, int64(12345), user.SnowflakeId)
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestGetUserByRefreshJwtCtx_ClaimsNotFound(t *testing.T) {
-	_, _, _, svcCtx := setupJwtTest(t)
-
-	ctx := context.Background()
-
-	user, err := GetUserByRefreshJwtCtx(ctx, svcCtx)
-
-	assert.Error(t, err)
-	assert.Nil(t, user)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 }

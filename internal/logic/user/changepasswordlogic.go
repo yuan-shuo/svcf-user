@@ -37,13 +37,13 @@ func (l *ChangePasswordLogic) ChangePassword(req *types.ChangePasswordReq) (resp
 		return nil, err
 	}
 	// 校验验证码是否属于用户对应邮箱且正确
-	if err := userutils.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, email, req.Code, codeType); err != nil {
+	if err := userutils.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx.Redis, email, req.Code, codeType); err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 先获取用户实例
-	user, err := userutils.GetUserByAccessJwtCtx(l.ctx, l.svcCtx)
+	user, err := userutils.GetUserByAccessJwtCtx(l.ctx, l.svcCtx.UsersModel)
 	if err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
@@ -56,13 +56,13 @@ func (l *ChangePasswordLogic) ChangePassword(req *types.ChangePasswordReq) (resp
 	}
 
 	// 重置用户密码
-	if err := userutils.ResetUserPassword(l.ctx, l.svcCtx, user, req.NewPassword); err != nil {
+	if err := userutils.ResetUserPassword(l.ctx, l.svcCtx.UsersModel, user, req.NewPassword); err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 标记已被使用
-	userutils.MarkCodeAsUsed(l.ctx, l.svcCtx, email, codeType)
+	userutils.MarkCodeAsUsed(l.ctx, l.svcCtx.Redis, email, codeType)
 
 	l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("success")
 	return

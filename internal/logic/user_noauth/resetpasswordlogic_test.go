@@ -68,7 +68,7 @@ func TestResetPasswordLogic_ResetPassword_Success(t *testing.T) {
 	newPassword := "NewPassword123!"
 
 	// 在 redis 中设置验证码
-	key := "account:reset_password:verify:" + email
+	key := "user:reset_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -116,7 +116,7 @@ func TestResetPasswordLogic_ResetPassword_InvalidCode(t *testing.T) {
 	wrongCode := "wrongcode"
 
 	// 在 redis 中设置正确的验证码
-	key := "account:reset_password:verify:" + email
+	key := "user:reset_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -172,8 +172,8 @@ func TestResetPasswordLogic_ResetPassword_CodeAlreadyUsed(t *testing.T) {
 	email := "test@example.com"
 	code := "123456"
 
-	// 在 redis 中设置已使用的验证码
-	key := "account:reset_password:verify:" + email
+	// 在 redis 中设置验证码（已使用）
+	key := "user:reset_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "1")
 	s.SetTTL(key, 5*time.Minute)
@@ -204,11 +204,11 @@ func TestResetPasswordLogic_ResetPassword_UserNotFound(t *testing.T) {
 	email := "test@example.com"
 	code := "123456"
 
-	// 在 redis 中设置验证码
-	key := "account:reset_password:verify:" + email
+	// 在 redis 中设置验证码（已过期）
+	key := "user:reset_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
-	s.SetTTL(key, 5*time.Minute)
+	s.SetTTL(key, 1*time.Nanosecond)
 
 	// 设置 mock 期望 - 用户不存在
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
@@ -243,7 +243,7 @@ func TestResetPasswordLogic_ResetPassword_WeakPassword(t *testing.T) {
 	weakPassword := "weak"
 
 	// 在 redis 中设置验证码
-	key := "account:reset_password:verify:" + email
+	key := "user:reset_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -287,7 +287,7 @@ func TestResetPasswordLogic_ResetPassword_UpdateFailed(t *testing.T) {
 	newPassword := "NewPassword123!"
 
 	// 在 redis 中设置验证码
-	key := "account:reset_password:verify:" + email
+	key := "user:reset_password:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)

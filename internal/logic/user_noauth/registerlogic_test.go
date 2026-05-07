@@ -39,9 +39,6 @@ func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.
 				Type: config.VerifyCodeType{
 					Register: "register",
 				},
-				// Redis: config.VerifyCodeRedisConfig{
-				// 	KeyPrefix: "account",
-				// },
 			},
 		},
 		Redis:      rds,
@@ -70,7 +67,7 @@ func TestRegisterLogic_Register_Success(t *testing.T) {
 	password := "StrongPass123!"
 
 	// 在 redis 中设置验证码
-	key := "account:register:verify:" + email
+	key := "user:register:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -112,7 +109,7 @@ func TestRegisterLogic_Register_InvalidCode(t *testing.T) {
 	code := "wrongcode"
 
 	// 在 redis 中设置正确的验证码
-	key := "account:register:verify:" + email
+	key := "user:register:verify:" + email
 	s.HSet(key, "code", "123456")
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -171,7 +168,7 @@ func TestRegisterLogic_Register_CodeAlreadyUsed(t *testing.T) {
 	code := "123456"
 
 	// 在 redis 中设置已使用的验证码
-	key := "account:register:verify:" + email
+	key := "user:register:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "1")
 	s.SetTTL(key, 5*time.Minute)
@@ -204,7 +201,7 @@ func TestRegisterLogic_Register_EmailAlreadyRegistered(t *testing.T) {
 	code := "123456"
 
 	// 在 redis 中设置验证码
-	key := "account:register:verify:" + email
+	key := "user:register:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -249,7 +246,7 @@ func TestRegisterLogic_Register_WeakPassword(t *testing.T) {
 	code := "123456"
 
 	// 在 redis 中设置验证码
-	key := "account:register:verify:" + email
+	key := "user:register:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -286,7 +283,7 @@ func TestRegisterLogic_Register_DatabaseError(t *testing.T) {
 	code := "123456"
 
 	// 在 redis 中设置验证码
-	key := "account:register:verify:" + email
+	key := "user:register:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -323,7 +320,7 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	code := "123456"
 
 	// 在 redis 中设置验证码
-	key := "account:register:verify:" + email
+	key := "user:register:verify:" + email
 	s.HSet(key, "code", code)
 	s.HSet(key, "used", "0")
 	s.SetTTL(key, 5*time.Minute)
@@ -345,111 +342,6 @@ func TestRegisterLogic_Register_InsertFailed(t *testing.T) {
 	// 验证结果
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestRegisterLogic_createUser_Success(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	nickname := "testuser"
-	email := "test@example.com"
-	passwd := "hashedpassword"
-
-	// 设置 mock 期望
-	mockUsersModel.On("Insert", ctx, mock2.MatchedBy(func(u *model.Users) bool {
-		return u.Nickname == nickname &&
-			u.Email == email &&
-			u.PasswordHash == passwd &&
-			u.SnowflakeId > 0 &&
-			!u.DeletedAt.Valid
-	})).Return(&mock.SqlResult{LastID: 1, RA: 1}, nil)
-
-	err := logic.createUser(nickname, email, passwd)
-
-	assert.NoError(t, err)
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestRegisterLogic_createUser_InsertFailed(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	nickname := "testuser"
-	email := "test@example.com"
-	passwd := "hashedpassword"
-
-	// 设置 mock 期望 - 插入失败
-	mockUsersModel.On("Insert", ctx, mock2.AnythingOfType("*model.Users")).Return(&mock.SqlResult{}, errors.New("insert failed"))
-
-	err := logic.createUser(nickname, email, passwd)
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestRegisterLogic_checkIfEmailHasBeenRegistered_NotFound(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	email := "new@example.com"
-
-	// 设置 mock 期望 - 未找到
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
-
-	err := logic.checkIfEmailHasBeenRegistered(email)
-
-	assert.NoError(t, err)
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestRegisterLogic_checkIfEmailHasBeenRegistered_Found(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	email := "existing@example.com"
-
-	// 设置 mock 期望 - 找到已存在的用户
-	existingUser := &model.Users{
-		Id:           1,
-		SnowflakeId:  123456789,
-		Email:        email,
-		Nickname:     "existing",
-		PasswordHash: "hashedpassword",
-	}
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
-
-	err := logic.checkIfEmailHasBeenRegistered(email)
-
-	assert.Error(t, err)
-	assert.True(t, mock.IsCodeError(err, errs.CodeEmailRegistered), "应该是邮箱已注册错误")
-	mockUsersModel.AssertExpectations(t)
-}
-
-func TestRegisterLogic_checkIfEmailHasBeenRegistered_DatabaseError(t *testing.T) {
-	_, _, mockUsersModel, svcCtx := setupRegisterTest(t)
-
-	ctx := context.Background()
-	logic := NewRegisterLogic(ctx, svcCtx)
-
-	email := "test@example.com"
-
-	// 设置 mock 期望 - 数据库查询出错
-	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, errors.New("database connection failed"))
-
-	err := logic.checkIfEmailHasBeenRegistered(email)
-
-	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 	mockUsersModel.AssertExpectations(t)
 }

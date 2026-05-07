@@ -32,19 +32,19 @@ func (l *ResetPasswordLogic) ResetPassword(req *types.ResetPasswordReq) (resp *t
 	codeType := l.svcCtx.Config.VerifyCodeConfig.Type.ResetPassword
 
 	// 检查验证码是否属于对应邮箱以及是否正确
-	if err := userutils.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
+	if err := userutils.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx.Redis, req.Email, req.Code, codeType); err != nil {
 		l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 重置用户密码
-	if err := userutils.ResetUserPasswordByEmail(l.ctx, l.svcCtx, req.Email, req.Password); err != nil {
+	if err := userutils.ResetUserPasswordByEmail(l.ctx, l.svcCtx.UsersModel, req.Email, req.Password); err != nil {
 		l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 标记已被使用
-	userutils.MarkCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
+	userutils.MarkCodeAsUsed(l.ctx, l.svcCtx.Redis, req.Email, codeType)
 
 	l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("success")
 	return
