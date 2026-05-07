@@ -1,14 +1,14 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
-package account_noauth
+package user_noauth
 
 import (
 	"context"
 	"database/sql"
 
 	"user/internal/errs"
-	"user/internal/logic/accutil"
+	"user/internal/logic/userutils"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -37,7 +37,7 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	codeType := l.svcCtx.Config.VerifyCodeConfig.Type.Register
 
 	// 检查验证码是否属于对应邮箱以及是否正确
-	if err := accutil.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
+	if err := userutils.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, req.Email, req.Code, codeType); err != nil {
 		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
 		return nil, err
 	}
@@ -49,13 +49,13 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	}
 
 	// 校验密码强度
-	if err := accutil.ValidatePasswordStrength(req.Password); err != nil {
+	if err := userutils.ValidatePasswordStrength(req.Password); err != nil {
 		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 密码加密
-	hashedPassword, err := accutil.HashPassword(req.Email, req.Password)
+	hashedPassword, err := userutils.HashPassword(req.Email, req.Password)
 	if err != nil {
 		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
 		return nil, err
@@ -68,7 +68,7 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	}
 
 	// 标记验证码已被使用
-	accutil.MarkCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
+	userutils.MarkCodeAsUsed(l.ctx, l.svcCtx, req.Email, codeType)
 
 	l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("success")
 	return

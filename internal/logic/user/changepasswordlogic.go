@@ -1,12 +1,12 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
-package account
+package user
 
 import (
 	"context"
 
-	"user/internal/logic/accutil"
+	"user/internal/logic/userutils"
 	"user/internal/svc"
 	"user/internal/types"
 
@@ -31,38 +31,38 @@ func (l *ChangePasswordLogic) ChangePassword(req *types.ChangePasswordReq) (resp
 	// 所需验证码类型 - 修改密码
 	codeType := l.svcCtx.Config.VerifyCodeConfig.Type.ChangePassword
 
-	email, err := accutil.GetEmailByJwtCtx(l.ctx)
+	email, err := userutils.GetEmailByJwtCtx(l.ctx)
 	if err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
 	}
 	// 校验验证码是否属于用户对应邮箱且正确
-	if err := accutil.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, email, req.Code, codeType); err != nil {
+	if err := userutils.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx, email, req.Code, codeType); err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 先获取用户实例
-	user, err := accutil.GetUserByAccessJwtCtx(l.ctx, l.svcCtx)
+	user, err := userutils.GetUserByAccessJwtCtx(l.ctx, l.svcCtx)
 	if err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 验证旧密码是否正确
-	if err := accutil.VerifyPasswordWithOldPasswordMismatchErrHint(user.PasswordHash, req.OldPassword, user.Email); err != nil {
+	if err := userutils.VerifyPasswordWithOldPasswordMismatchErrHint(user.PasswordHash, req.OldPassword, user.Email); err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 重置用户密码
-	if err := accutil.ResetUserPassword(l.ctx, l.svcCtx, user, req.NewPassword); err != nil {
+	if err := userutils.ResetUserPassword(l.ctx, l.svcCtx, user, req.NewPassword); err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 标记已被使用
-	accutil.MarkCodeAsUsed(l.ctx, l.svcCtx, email, codeType)
+	userutils.MarkCodeAsUsed(l.ctx, l.svcCtx, email, codeType)
 
 	l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("success")
 	return

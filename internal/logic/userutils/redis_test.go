@@ -1,4 +1,4 @@
-package accutil
+package userutils
 
 import (
 	"context"
@@ -41,9 +41,9 @@ func setupRedisTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.Use
 					Register:      "register",
 					ResetPassword: "reset_password",
 				},
-				Redis: config.VerifyCodeRedisConfig{
-					KeyPrefix: "account",
-				},
+				// Redis: config.VerifyCodeRedisConfig{
+				// 	KeyPrefix: "account",
+				// },
 			},
 		},
 		Redis:      rds,

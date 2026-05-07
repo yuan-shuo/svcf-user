@@ -1,7 +1,7 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
-package account_noauth
+package user_noauth
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"user/internal/errs"
-	"user/internal/logic/accutil"
+	"user/internal/logic/userutils"
 	"user/internal/svc"
 	"user/internal/types"
 	"user/internal/utils"
@@ -163,7 +163,7 @@ func (l *SendVerifyCodeLogic) isValidCodeType(codeType string) bool {
 
 // checkRateLimit 检查发送频率限制
 func (l *SendVerifyCodeLogic) checkRateLimit(email, codeType string) error {
-	limitKey := accutil.BuildLimitKey(email, codeType)
+	limitKey := userutils.BuildLimitKey(email, codeType)
 	retryAfter := l.svcCtx.Config.VerifyCodeConfig.Time.RetryAfter
 
 	// SET key value NX EX seconds：只有key不存在时才设置，并设置过期时间
@@ -188,10 +188,10 @@ func (l *SendVerifyCodeLogic) checkRateLimit(email, codeType string) error {
 // generateAndSaveCode 生成验证码并保存到Redis
 func (l *SendVerifyCodeLogic) generateAndSaveCode(req *types.SendVerifyCodeReq) string {
 	code := utils.GenerateMixedCode(6)
-	redisKey := accutil.BuildVerifyKey(req.Email, req.Type)
+	redisKey := userutils.BuildVerifyKey(req.Email, req.Type)
 	redisValue := map[string]string{
-		accutil.RedisValueCodeFieldName: code,
-		accutil.RedisValueUsedFieldName: "0",
+		userutils.RedisValueCodeFieldName: code,
+		userutils.RedisValueUsedFieldName: "0",
 	}
 
 	if err := utils.SetHashWithExpire(
@@ -240,7 +240,7 @@ func (l *SendVerifyCodeLogic) buildResponse() *types.SendVerifyCodeResp {
 
 // cleanupRateLimit 清理限流标记
 func (l *SendVerifyCodeLogic) cleanupRateLimit(email, codeType string) {
-	limitKey := accutil.BuildLimitKey(email, codeType)
+	limitKey := userutils.BuildLimitKey(email, codeType)
 	if _, err := l.svcCtx.Redis.DelCtx(l.ctx, limitKey); err != nil {
 		logx.Errorf("清理限流标记失败, email=%s, err=%v", email, err)
 	}
@@ -248,7 +248,7 @@ func (l *SendVerifyCodeLogic) cleanupRateLimit(email, codeType string) {
 
 // cleanupVerifyCode 清理验证码数据
 func (l *SendVerifyCodeLogic) cleanupVerifyCode(email, codeType string) {
-	verifyKey := accutil.BuildVerifyKey(email, codeType)
+	verifyKey := userutils.BuildVerifyKey(email, codeType)
 	if _, err := l.svcCtx.Redis.DelCtx(l.ctx, verifyKey); err != nil {
 		logx.Errorf("清理验证码数据失败, email=%s, err=%v", email, err)
 	}

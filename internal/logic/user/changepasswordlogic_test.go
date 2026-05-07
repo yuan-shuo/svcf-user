@@ -1,4 +1,4 @@
-package account
+package user
 
 import (
 	"context"
@@ -39,9 +39,9 @@ func setupChangePasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, 
 				Type: config.VerifyCodeType{
 					ChangePassword: "change_password",
 				},
-				Redis: config.VerifyCodeRedisConfig{
-					KeyPrefix: "account",
-				},
+				// Redis: config.VerifyCodeRedisConfig{
+				// 	KeyPrefix: "account",
+				// },
 			},
 		},
 		Redis:      rds,

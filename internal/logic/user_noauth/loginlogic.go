@@ -1,14 +1,14 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
-package account_noauth
+package user_noauth
 
 import (
 	"context"
 	"errors"
 
 	"user/internal/errs"
-	"user/internal/logic/accutil"
+	"user/internal/logic/userutils"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
@@ -40,13 +40,13 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 	}
 
 	// 2. 校验密码
-	if err := accutil.VerifyPasswordWithVagueMismatchErrHint(user.PasswordHash, req.Password, req.Email); err != nil {
+	if err := userutils.VerifyPasswordWithVagueMismatchErrHint(user.PasswordHash, req.Password, req.Email); err != nil {
 		l.svcCtx.Metrics.AccountNoauth.LoginsTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 3. 签发 accessToken
-	accessToken, err := accutil.GenerateAccessToken(l.svcCtx.Config, user)
+	accessToken, err := userutils.GenerateAccessToken(l.svcCtx.Config, user)
 	if err != nil {
 		l.svcCtx.Metrics.AccountNoauth.LoginsTotal.Inc("fail")
 		return nil, err
@@ -56,7 +56,7 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 	var refreshToken string
 	if req.RememberMe {
 		// 仅在用户主动选择 "记住我" 时提供RT
-		refreshToken, err = accutil.GenerateRefreshToken(l.svcCtx.Config, user)
+		refreshToken, err = userutils.GenerateRefreshToken(l.svcCtx.Config, user)
 		if err != nil {
 			l.svcCtx.Metrics.AccountNoauth.LoginsTotal.Inc("fail")
 			return nil, err

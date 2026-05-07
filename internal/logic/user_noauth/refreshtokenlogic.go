@@ -1,12 +1,12 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
-package account_noauth
+package user_noauth
 
 import (
 	"context"
 
-	"user/internal/logic/accutil"
+	"user/internal/logic/userutils"
 	"user/internal/svc"
 	"user/internal/types"
 
@@ -29,19 +29,19 @@ func NewRefreshTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Refr
 
 func (l *RefreshTokenLogic) RefreshToken(req *types.RefreshTokenReq) (resp *types.RefreshTokenResp, err error) {
 	// 获取用户实例
-	user, err := accutil.GetUserByRefreshToken(l.ctx, l.svcCtx, req.RefreshToken)
+	user, err := userutils.GetUserByRefreshToken(l.ctx, l.svcCtx, req.RefreshToken)
 	if err != nil {
 		l.svcCtx.Metrics.AccountNoauth.TokenRefreshesTotal.Inc("fail")
 		return nil, err
 	}
 
 	// 重新签发新token
-	newAccess, err := accutil.GenerateAccessToken(l.svcCtx.Config, user)
+	newAccess, err := userutils.GenerateAccessToken(l.svcCtx.Config, user)
 	if err != nil {
 		l.svcCtx.Metrics.AccountNoauth.TokenRefreshesTotal.Inc("fail")
 		return nil, err
 	}
-	newRefresh, err := accutil.GenerateRefreshToken(l.svcCtx.Config, user)
+	newRefresh, err := userutils.GenerateRefreshToken(l.svcCtx.Config, user)
 	if err != nil {
 		l.svcCtx.Metrics.AccountNoauth.TokenRefreshesTotal.Inc("fail")
 		return nil, err

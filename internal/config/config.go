@@ -56,15 +56,15 @@ type TokenLimit struct {
 
 // 验证码配置
 type VerifyCodeConfig struct {
-	Type  VerifyCodeType        // 验证码类型
-	Time  VerifyCodeTime        // 验证码有效期
-	Redis VerifyCodeRedisConfig // redis配置
+	Type VerifyCodeType // 验证码类型
+	Time VerifyCodeTime // 验证码有效期
+	// Redis VerifyCodeRedisConfig // redis配置
 }
 
-// 验证码redis配置
-type VerifyCodeRedisConfig struct {
-	KeyPrefix string // 存放于redis时使用的键名前缀, 给入a则redis.key=a:receiver_email
-}
+// // 验证码redis配置
+// type VerifyCodeRedisConfig struct {
+// 	KeyPrefix string // 存放于redis时使用的键名前缀, 给入a则redis.key=a:receiver_email
+// }
 
 type VerifyCodeTime struct {
 	ExpireIn   int // 验证码有效期, 单位秒

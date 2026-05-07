@@ -1,4 +1,4 @@
-package account_noauth
+package user_noauth
 
 import (
 	"context"
@@ -39,9 +39,9 @@ func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.
 				Type: config.VerifyCodeType{
 					Register: "register",
 				},
-				Redis: config.VerifyCodeRedisConfig{
-					KeyPrefix: "account",
-				},
+				// Redis: config.VerifyCodeRedisConfig{
+				// 	KeyPrefix: "account",
+				// },
 			},
 		},
 		Redis:      rds,

@@ -122,10 +122,6 @@ VerifyCodeConfig:
     ExpireIn: 300 # 验证码有效期时间，单位：秒
     RetryAfter: 60 # 验证码请求间隔时间，单位：秒
 
-  # 验证码redis数据库配置
-  Redis:
-    KeyPrefix: account # 验证码redis数据库键的前缀
-
 # prometheus 配置
 Prometheus:
   Host: 0.0.0.0

@@ -6,8 +6,8 @@ package handler
 import (
 	"net/http"
 
-	account "user/internal/handler/account"
-	account_noauth "user/internal/handler/account_noauth"
+	user "user/internal/handler/user"
+	user_noauth "user/internal/handler/user_noauth"
 	"user/internal/svc"
 
 	"github.com/zeromicro/go-zero/rest"
@@ -21,12 +21,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				{
 					Method:  http.MethodPost,
 					Path:    "/changepassword",
-					Handler: account.ChangePasswordHandler(serverCtx),
+					Handler: user.ChangePasswordHandler(serverCtx),
 				},
 			}...,
 		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api/account/v1"),
+		rest.WithPrefix("/api/user/v1"),
 	)
 
 	server.AddRoutes(
@@ -36,26 +36,26 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				{
 					Method:  http.MethodPost,
 					Path:    "/login",
-					Handler: account_noauth.LoginHandler(serverCtx),
+					Handler: user_noauth.LoginHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
 					Path:    "/register",
-					Handler: account_noauth.RegisterHandler(serverCtx),
+					Handler: user_noauth.RegisterHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
 					Path:    "/resetpassword",
-					Handler: account_noauth.ResetPasswordHandler(serverCtx),
+					Handler: user_noauth.ResetPasswordHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
 					Path:    "/verifycode",
-					Handler: account_noauth.SendVerifyCodeHandler(serverCtx),
+					Handler: user_noauth.SendVerifyCodeHandler(serverCtx),
 				},
 			}...,
 		),
-		rest.WithPrefix("/api/account/v1/noauth"),
+		rest.WithPrefix("/api/user/v1/noauth"),
 	)
 
 	server.AddRoutes(
@@ -65,10 +65,10 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				{
 					Method:  http.MethodPost,
 					Path:    "/refreshtoken",
-					Handler: account_noauth.RefreshTokenHandler(serverCtx),
+					Handler: user_noauth.RefreshTokenHandler(serverCtx),
 				},
 			}...,
 		),
-		rest.WithPrefix("/api/account/v1/noauth"),
+		rest.WithPrefix("/api/user/v1/noauth"),
 	)
 }

@@ -1,4 +1,4 @@
-package accutil
+package userutils
 
 import (
 	"context"

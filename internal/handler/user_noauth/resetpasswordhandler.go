@@ -1,27 +1,27 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.9.2
 
-package account_noauth
+package user_noauth
 
 import (
 	"net/http"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
-	"user/internal/logic/account_noauth"
+	"user/internal/logic/user_noauth"
 	"user/internal/svc"
 	"user/internal/types"
 )
 
-func SendVerifyCodeHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func ResetPasswordHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.SendVerifyCodeReq
+		var req types.ResetPasswordReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := account_noauth.NewSendVerifyCodeLogic(r.Context(), svcCtx)
-		resp, err := l.SendVerifyCode(&req)
+		l := user_noauth.NewResetPasswordLogic(r.Context(), svcCtx)
+		resp, err := l.ResetPassword(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {

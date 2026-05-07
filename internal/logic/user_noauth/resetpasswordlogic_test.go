@@ -1,4 +1,4 @@
-package account_noauth
+package user_noauth
 
 import (
 	"context"
@@ -38,9 +38,9 @@ func setupResetPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *
 				Type: config.VerifyCodeType{
 					ResetPassword: "reset_password",
 				},
-				Redis: config.VerifyCodeRedisConfig{
-					KeyPrefix: "account",
-				},
+				// Redis: config.VerifyCodeRedisConfig{
+				// 	KeyPrefix: "account",
+				// },
 			},
 		},
 		Redis:      rds,
