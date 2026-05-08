@@ -34,13 +34,11 @@ func setupResetPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *
 	// 创建 service context
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
+			BcryptCost: 4, // 使用最小 cost 加快测试速度
 			VerifyCodeConfig: config.VerifyCodeConfig{
 				Type: config.VerifyCodeType{
 					ResetPassword: "reset_password",
 				},
-				// Redis: config.VerifyCodeRedisConfig{
-				// 	KeyPrefix: "account",
-				// },
 			},
 		},
 		Redis:      rds,

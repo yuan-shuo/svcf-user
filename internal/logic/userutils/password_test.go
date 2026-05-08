@@ -59,7 +59,7 @@ func TestHashPassword_Success(t *testing.T) {
 	email := "test@example.com"
 	password := "password123"
 
-	hashed, err := HashPassword(email, password)
+	hashed, err := HashPassword(email, password, 4)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, hashed)
@@ -70,10 +70,22 @@ func TestHashPassword_EmptyPassword(t *testing.T) {
 	email := "test@example.com"
 	password := ""
 
-	hashed, err := HashPassword(email, password)
+	hashed, err := HashPassword(email, password, 4)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, hashed) // 空密码也应该能生成哈�?
+}
+
+func TestHashPassword_InvalidCost(t *testing.T) {
+	email := "test@example.com"
+	password := "password123"
+
+	// cost 超出范围应该返回错误
+	hashed, err := HashPassword(email, password, 32)
+
+	assert.Error(t, err)
+	assert.Empty(t, hashed)
+	assert.True(t, mock.IsCodeError(err, errs.CodeInternalError), "应该是内部错误")
 }
 
 func TestResetUserPassword_Success(t *testing.T) {
@@ -96,7 +108,7 @@ func TestResetUserPassword_Success(t *testing.T) {
 	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(nil)
 
 	// 直接使用 ResetUserPassword，传�?user 对象
-	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, newPassword)
+	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, newPassword, 4)
 
 	assert.NoError(t, err)
 	// 验证密码已被更新
@@ -112,7 +124,7 @@ func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
 	oldPassword := "OldPassword123!"
 
 	// 创建一个已有密码的用户
-	hashedOldPassword, _ := HashPassword(email, oldPassword)
+	hashedOldPassword, _ := HashPassword(email, oldPassword, 4)
 	existingUser := &model.Users{
 		Id:           1,
 		SnowflakeId:  123456789,
@@ -122,7 +134,7 @@ func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
 	}
 
 	// 尝试使用相同的密码重�?
-	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, oldPassword)
+	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, oldPassword, 4)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodePasswordSameAsOld), "应该是新密码与旧密码相同错误")
@@ -144,7 +156,7 @@ func TestResetUserPassword_WeakPassword(t *testing.T) {
 	}
 
 	// 尝试使用弱密码重�?
-	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, weakPassword)
+	err := ResetUserPassword(ctx, svcCtx.UsersModel, existingUser, weakPassword, 4)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
@@ -168,7 +180,7 @@ func TestResetUserPasswordByEmail_Success(t *testing.T) {
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
 	mockUsersModel.On("Update", ctx, mock2.AnythingOfType("*model.Users")).Return(nil)
 
-	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, newPassword)
+	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, newPassword, 4)
 
 	assert.NoError(t, err)
 	mockUsersModel.AssertExpectations(t)
@@ -184,7 +196,7 @@ func TestResetUserPasswordByEmail_UserNotFound(t *testing.T) {
 	// 设置 mock 期望 - 用户不存�?
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(nil, sqlx.ErrNotFound)
 
-	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, newPassword)
+	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, newPassword, 4)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotFound), "应该是用户不存在错误")
@@ -208,7 +220,7 @@ func TestResetUserPasswordByEmail_WeakPassword(t *testing.T) {
 	}
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(existingUser, nil)
 
-	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, weakPassword)
+	err := ResetUserPasswordByEmail(ctx, svcCtx.UsersModel, email, weakPassword, 4)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeWeakPassword), "应该是密码强度不足错误")
@@ -272,7 +284,7 @@ func TestGetUserByEmail_DatabaseError(t *testing.T) {
 func TestVerifyPasswordWithVagueMismatchErrHint_Success(t *testing.T) {
 	email := "test@example.com"
 	password := "password123"
-	hashedPassword, _ := HashPassword(email, password)
+	hashedPassword, _ := HashPassword(email, password, 4)
 
 	err := VerifyPasswordWithVagueMismatchErrHint(hashedPassword, password, email)
 
@@ -283,7 +295,7 @@ func TestVerifyPasswordWithVagueMismatchErrHint_InvalidPassword(t *testing.T) {
 	email := "test@example.com"
 	password := "password123"
 	wrongPassword := "wrongpassword"
-	hashedPassword, _ := HashPassword(email, password)
+	hashedPassword, _ := HashPassword(email, password, 4)
 
 	err := VerifyPasswordWithVagueMismatchErrHint(hashedPassword, wrongPassword, email)
 
@@ -295,7 +307,7 @@ func TestVerifyPasswordWithOldPasswordMismatchErrHint_InvalidPassword(t *testing
 	email := "test@example.com"
 	password := "password123"
 	wrongPassword := "wrongpassword"
-	hashedPassword, _ := HashPassword(email, password)
+	hashedPassword, _ := HashPassword(email, password, 4)
 
 	err := VerifyPasswordWithOldPasswordMismatchErrHint(hashedPassword, wrongPassword, email)
 

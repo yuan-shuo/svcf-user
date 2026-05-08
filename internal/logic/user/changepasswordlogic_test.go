@@ -35,13 +35,11 @@ func setupChangePasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, 
 	// 创建 service context
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
+			BcryptCost: 4, // 使用最小 cost 加快测试速度
 			VerifyCodeConfig: config.VerifyCodeConfig{
 				Type: config.VerifyCodeType{
 					ChangePassword: "change_password",
 				},
-				// Redis: config.VerifyCodeRedisConfig{
-				// 	KeyPrefix: "account",
-				// },
 			},
 		},
 		Redis:      rds,
@@ -84,7 +82,7 @@ func TestChangePasswordLogic_ChangePassword_Success(t *testing.T) {
 	newPassword := "NewPassword123!"
 
 	// 先生成旧密码的哈�?
-	hashedOldPassword, _ := utils.HashPassword(oldPassword)
+	hashedOldPassword, _ := utils.HashPassword(oldPassword, 4)
 
 	// �?redis 中设置验证码
 	key := "user:change_password:verify:" + email
@@ -276,7 +274,7 @@ func TestChangePasswordLogic_ChangePassword_OldPasswordIncorrect(t *testing.T) {
 	newPassword := "NewPassword123!"
 
 	// 先生成旧密码的哈�?
-	hashedOldPassword, _ := utils.HashPassword(oldPassword)
+	hashedOldPassword, _ := utils.HashPassword(oldPassword, 4)
 
 	// �?redis 中设置验证码
 	key := "user:change_password:verify:" + email
@@ -323,7 +321,7 @@ func TestChangePasswordLogic_ChangePassword_SameAsOldPassword(t *testing.T) {
 	oldPassword := "OldPassword123!"
 
 	// 先生成旧密码的哈�?
-	hashedOldPassword, _ := utils.HashPassword(oldPassword)
+	hashedOldPassword, _ := utils.HashPassword(oldPassword, 4)
 
 	// �?redis 中设置验证码
 	key := "user:change_password:verify:" + email
@@ -372,7 +370,7 @@ func TestChangePasswordLogic_ChangePassword_WeakPassword(t *testing.T) {
 	weakNewPassword := "weak"
 
 	// 先生成旧密码的哈�?
-	hashedOldPassword, _ := utils.HashPassword(oldPassword)
+	hashedOldPassword, _ := utils.HashPassword(oldPassword, 4)
 
 	// �?redis 中设置验证码
 	key := "user:change_password:verify:" + email
@@ -420,7 +418,7 @@ func TestChangePasswordLogic_ChangePassword_UpdateFailed(t *testing.T) {
 	newPassword := "NewPassword123!"
 
 	// 先生成旧密码的哈�?
-	hashedOldPassword, _ := utils.HashPassword(oldPassword)
+	hashedOldPassword, _ := utils.HashPassword(oldPassword, 4)
 
 	// �?redis 中设置验证码
 	key := "user:change_password:verify:" + email

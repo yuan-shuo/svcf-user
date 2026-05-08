@@ -44,27 +44,31 @@ func ValidatePasswordStrength(password string) error {
 	return nil
 }
 
-// HashPassword 密码加密
-func HashPassword(email, password string) (string, error) {
-	hashedPassword, err := utils.HashPassword(password)
+func HashPassword(email, password string, cost int) (string, error) {
+	hashedPassword, err := utils.HashPassword(password, cost)
 	if err != nil {
-		// 记录详细错误日志
+		// 类型断言判断是否是 InvalidCostError
+		if _, ok := err.(bcrypt.InvalidCostError); ok {
+			// 这里后面应该搞个promtheus-warn指标之类的做提醒，毕竟不能panic连坐其他接口，但还得有提醒
+			logx.Errorf("bcrypt cost 配置错误, cost=%d, err=%v", cost, err)
+			return "", errs.New(errs.CodeInternalError)
+		}
+
 		logx.Errorf("密码加密失败, email=%s, err=%v", email, err)
-		// 返回通用错误给客户端
 		return "", errs.New(errs.CodeInternalError)
 	}
 	return hashedPassword, nil
 }
 
 // ResetUserPassword 重置用户密码
-func ResetUserPasswordByEmail(ctx context.Context, usersModel model.UsersModel, email, newPassword string) error {
+func ResetUserPasswordByEmail(ctx context.Context, usersModel model.UsersModel, email, newPassword string, bcryptCost int) error {
 	// 获取用户
 	user, err := GetUserByEmail(ctx, usersModel, email)
 	if err != nil {
 		return err
 	}
 
-	return ResetUserPassword(ctx, usersModel, user, newPassword)
+	return ResetUserPassword(ctx, usersModel, user, newPassword, bcryptCost)
 }
 
 // GetUserByUid 获取用户实例
@@ -151,7 +155,7 @@ func CreateUser(ctx context.Context, usersModel model.UsersModel, nickname, emai
 }
 
 // resetUserPassword 重置用户密码
-func ResetUserPassword(ctx context.Context, usersModel model.UsersModel, user *model.Users, newPassword string) error {
+func ResetUserPassword(ctx context.Context, usersModel model.UsersModel, user *model.Users, newPassword string, bcryptCost int) error {
 	// 校验密码强度
 	if err := ValidatePasswordStrength(newPassword); err != nil {
 		return err
@@ -162,7 +166,7 @@ func ResetUserPassword(ctx context.Context, usersModel model.UsersModel, user *m
 		return errs.New(errs.CodePasswordSameAsOld)
 	}
 
-	newHashedPassword, err := HashPassword(user.Email, newPassword)
+	newHashedPassword, err := HashPassword(user.Email, newPassword, bcryptCost)
 	if err != nil {
 		return err
 	}

@@ -50,7 +50,7 @@ func (l *RegisterLogic) Register(req *types.RegisterReq) (resp *types.RegisterRe
 	}
 
 	// 密码加密
-	hashedPassword, err := userutils.HashPassword(req.Email, req.Password)
+	hashedPassword, err := userutils.HashPassword(req.Email, req.Password, l.svcCtx.Config.BcryptCost)
 	if err != nil {
 		l.svcCtx.Metrics.AccountNoauth.RegistrationsTotal.Inc("fail")
 		return nil, err

@@ -61,6 +61,11 @@ SmtpConfig:
 
 # --- 以下配置，如果是用容器跑的，不太需要有改动了 ---
 
+# bcrypt 加密成本因子，取值范围 4-31
+# 生产环境建议 12，开发环境可用 5 加快速度
+# 测试 cost 不取 4 是因为: 如果 config 读取错误, cost会为0, 经过 ensure 调整后自动为 4 无法辨识是否生效
+BcryptCost: 5
+
 # kafka消费者配置
 KqConsumerConf:
 

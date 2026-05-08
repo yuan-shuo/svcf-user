@@ -11,8 +11,6 @@ import (
 )
 
 type Config struct {
-	// Register Register
-
 	KqConsumerConf kq.KqConf // 消息队列消费者配置
 
 	SmtpConfig SmtpConfig // 邮件发送配置
@@ -25,6 +23,7 @@ type Config struct {
 	Auth          Auth   // jwt认证配置
 	RefreshSecret string // Refresh Token 签名密钥
 	RefreshExpire int64  // Refresh Token 有效期
+	BcryptCost    int    // bcrypt 加密成本因子，取值范围 4-31
 
 	VerifyCodeConfig VerifyCodeConfig // 验证码配置
 
@@ -58,13 +57,7 @@ type TokenLimit struct {
 type VerifyCodeConfig struct {
 	Type VerifyCodeType // 验证码类型
 	Time VerifyCodeTime // 验证码有效期
-	// Redis VerifyCodeRedisConfig // redis配置
 }
-
-// // 验证码redis配置
-// type VerifyCodeRedisConfig struct {
-// 	KeyPrefix string // 存放于redis时使用的键名前缀, 给入a则redis.key=a:receiver_email
-// }
 
 type VerifyCodeTime struct {
 	ExpireIn   int // 验证码有效期, 单位秒

@@ -56,7 +56,7 @@ func (l *ChangePasswordLogic) ChangePassword(req *types.ChangePasswordReq) (resp
 	}
 
 	// 重置用户密码
-	if err := userutils.ResetUserPassword(l.ctx, l.svcCtx.UsersModel, user, req.NewPassword); err != nil {
+	if err := userutils.ResetUserPassword(l.ctx, l.svcCtx.UsersModel, user, req.NewPassword, l.svcCtx.Config.BcryptCost); err != nil {
 		l.svcCtx.Metrics.Account.PasswordChangesTotal.Inc("fail")
 		return nil, err
 	}

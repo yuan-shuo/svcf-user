@@ -35,6 +35,7 @@ func setupRegisterTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.
 	// 创建 service context
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
+			BcryptCost: 4, // 使用最小 cost 加快测试速度
 			VerifyCodeConfig: config.VerifyCodeConfig{
 				Type: config.VerifyCodeType{
 					Register: "register",

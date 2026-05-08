@@ -7,153 +7,152 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// 测试使用的 cost 值，使用最小值加快测试速度
+const testCost = 4
+
 func TestHashPassword(t *testing.T) {
-	t.Run("成功加密密码", func(t *testing.T) {
-		password := "testpassword123"
+	tests := []struct {
+		name     string
+		password string
+		cost     int
+		wantErr  bool
+	}{
+		{"正常密码加密", "testpassword123", testCost, false},
+		{"短密码加密", "short", testCost, false},
+		{"空密码加密", "", testCost, false},
+		{"长密码加密", "thisisaverylongpasswordthatexceedsnormallengthlimits123456789", testCost, false},
+		{"包含特殊字符的密码", "p@$$w0rd!#$%^&*()_+-=[]{}|;':\",./<>?", testCost, false},
+		{"包含Unicode字符的密码", "密码123🔐", testCost, false},
+		{"cost为MinCost", "test", bcrypt.MinCost, false},
+		{"cost为6（边界内）", "test", 6, false},
+		{"cost超出上边界", "test", 32, true},
+		{"cost为负数", "test", -1, true},
+		{"cost为0", "test", 0, true},
+		{"cost为3（小于MinCost）", "test", 3, true},
+	}
 
-		hashed, err := HashPassword(password)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hashed, err := HashPassword(tt.password, tt.cost)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Empty(t, hashed)
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotEmpty(t, hashed)
+			assert.NotEqual(t, tt.password, hashed)
+			// 验证生成的哈希是有效的 bcrypt 格式
+			assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(hashed), []byte(tt.password)))
+		})
+	}
+}
 
-		assert.NoError(t, err)
-		assert.NotEmpty(t, hashed)
-		assert.NotEqual(t, password, hashed)
-	})
+func TestHashPassword_SamePasswordDifferentHash(t *testing.T) {
+	password := "samepassword"
 
-	t.Run("生成的哈希长度大于0", func(t *testing.T) {
-		password := "short"
+	hashed1, err1 := HashPassword(password, testCost)
+	hashed2, err2 := HashPassword(password, testCost)
 
-		hashed, err := HashPassword(password)
-
-		assert.NoError(t, err)
-		assert.Greater(t, len(hashed), 0)
-	})
-
-	t.Run("相同密码生成不同哈希", func(t *testing.T) {
-		password := "samepassword"
-
-		hashed1, err1 := HashPassword(password)
-		hashed2, err2 := HashPassword(password)
-
-		assert.NoError(t, err1)
-		assert.NoError(t, err2)
-		assert.NotEqual(t, hashed1, hashed2, "相同密码应该生成不同的哈希值（因为使用了随机盐）")
-	})
-
-	t.Run("空密码可以加密", func(t *testing.T) {
-		password := ""
-
-		hashed, err := HashPassword(password)
-
-		assert.NoError(t, err)
-		assert.NotEmpty(t, hashed)
-	})
-
-	t.Run("长密码可以加密", func(t *testing.T) {
-		// bcrypt 最大支持 72 字节
-		password := "thisisaverylongpasswordthatexceedsnormallengthlimits123456789"
-
-		hashed, err := HashPassword(password)
-
-		assert.NoError(t, err)
-		assert.NotEmpty(t, hashed)
-	})
-
-	t.Run("包含特殊字符的密码可以加密", func(t *testing.T) {
-		password := "p@$$w0rd!#$%^&*()_+-=[]{}|;':\",./<>?"
-
-		hashed, err := HashPassword(password)
-
-		assert.NoError(t, err)
-		assert.NotEmpty(t, hashed)
-	})
-
-	t.Run("包含Unicode字符的密码可以加密", func(t *testing.T) {
-		password := "密码123🔐"
-
-		hashed, err := HashPassword(password)
-
-		assert.NoError(t, err)
-		assert.NotEmpty(t, hashed)
-	})
+	assert.NoError(t, err1)
+	assert.NoError(t, err2)
+	assert.NotEqual(t, hashed1, hashed2, "相同密码应该生成不同的哈希值（因为使用了随机盐）")
 }
 
 func TestComparePassword(t *testing.T) {
-	t.Run("正确的密码验证通过", func(t *testing.T) {
-		password := "testpassword123"
-		hashed, err := HashPassword(password)
-		assert.NoError(t, err)
+	password := "testpassword123"
+	hashed, _ := HashPassword(password, testCost)
 
-		err = ComparePassword(hashed, password)
+	tests := []struct {
+		name           string
+		hashedPassword string
+		password       string
+		wantErr        bool
+		expectedErr    error
+	}{
+		{"正确的密码验证通过", hashed, password, false, nil},
+		{"错误的密码验证失败", hashed, "wrongpassword", true, bcrypt.ErrMismatchedHashAndPassword},
+		{"空密码验证失败", hashed, "", true, bcrypt.ErrMismatchedHashAndPassword},
+		{"无效哈希格式", "invalidhash", password, true, nil},
+		{"空哈希", "", password, true, nil},
+	}
 
-		assert.NoError(t, err)
-	})
-
-	t.Run("错误的密码验证失败", func(t *testing.T) {
-		password := "testpassword123"
-		wrongPassword := "wrongpassword"
-		hashed, err := HashPassword(password)
-		assert.NoError(t, err)
-
-		err = ComparePassword(hashed, wrongPassword)
-
-		assert.Error(t, err)
-		assert.Equal(t, bcrypt.ErrMismatchedHashAndPassword, err)
-	})
-
-	t.Run("验证不同哈希的相同密码", func(t *testing.T) {
-		password := "samepassword"
-		hashed1, _ := HashPassword(password)
-		hashed2, _ := HashPassword(password)
-
-		// 虽然哈希值不同，但都应该能验证通过
-		err1 := ComparePassword(hashed1, password)
-		err2 := ComparePassword(hashed2, password)
-
-		assert.NoError(t, err1)
-		assert.NoError(t, err2)
-	})
-
-	t.Run("验证空密码", func(t *testing.T) {
-		password := ""
-		hashed, err := HashPassword(password)
-		assert.NoError(t, err)
-
-		err = ComparePassword(hashed, password)
-
-		assert.NoError(t, err)
-	})
-
-	t.Run("使用错误的哈希格式返回错误", func(t *testing.T) {
-		invalidHash := "invalidhash"
-		password := "testpassword"
-
-		err := ComparePassword(invalidHash, password)
-
-		assert.Error(t, err)
-	})
-
-	t.Run("使用空哈希返回错误", func(t *testing.T) {
-		password := "testpassword"
-
-		err := ComparePassword("", password)
-
-		assert.Error(t, err)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ComparePassword(tt.hashedPassword, tt.password)
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.Equal(t, tt.expectedErr, err)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestHashPasswordAndCompare(t *testing.T) {
-	t.Run("完整的加密和验证流程", func(t *testing.T) {
-		password := "mypassword"
+func TestComparePassword_DifferentHashesSamePassword(t *testing.T) {
+	password := "samepassword"
+	hashed1, _ := HashPassword(password, testCost)
+	hashed2, _ := HashPassword(password, testCost)
 
-		// 加密
-		hashed, err := HashPassword(password)
-		assert.NoError(t, err)
+	// 虽然哈希值不同，但都应该能验证通过
+	assert.NoError(t, ComparePassword(hashed1, password))
+	assert.NoError(t, ComparePassword(hashed2, password))
+}
+
+func TestCheckCost(t *testing.T) {
+	tests := []struct {
+		name    string
+		cost    int
+		wantErr bool
+	}{
+		{"MinCost-1（超出下边界）", bcrypt.MinCost - 1, true},
+		{"MinCost（边界值）", bcrypt.MinCost, false},
+		{"MinCost+1（边界内）", bcrypt.MinCost + 1, false},
+		{"正常值10", 10, false},
+		{"6（边界内）", 6, false},
+		{"MaxCost-1（边界内）", bcrypt.MaxCost - 1, false},
+		{"MaxCost（边界值）", bcrypt.MaxCost, false},
+		{"MaxCost+1（超出上边界）", bcrypt.MaxCost + 1, true},
+		{"负数", -1, true},
+		{"0", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkCost(tt.cost)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.IsType(t, bcrypt.InvalidCostError(0), err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestHashPasswordAndCompare_RoundTrip(t *testing.T) {
+	passwords := []string{
+		"simple",
+		"ComplexP@ssw0rd!",
+		"1234567890",
+		"!@#$%^&*()",
+		"中文字符测试",
+		"   spaces   ",
+		"mixed123!@#中文",
+		"",
+	}
+
+	for _, pwd := range passwords {
+		hashed, err := HashPassword(pwd, testCost)
+		assert.NoError(t, err, "密码 '%s' 加密失败", pwd)
 
 		// 验证正确密码
-		err = ComparePassword(hashed, password)
-		assert.NoError(t, err)
+		assert.NoError(t, ComparePassword(hashed, pwd), "密码 '%s' 应该验证通过", pwd)
 
 		// 验证错误密码
-		err = ComparePassword(hashed, "wrongpassword")
-		assert.Error(t, err)
-	})
+		assert.Error(t, ComparePassword(hashed, pwd+"wrong"), "错误密码应该验证失败")
+	}
 }

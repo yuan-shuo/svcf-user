@@ -38,7 +38,7 @@ func (l *ResetPasswordLogic) ResetPassword(req *types.ResetPasswordReq) (resp *t
 	}
 
 	// 重置用户密码
-	if err := userutils.ResetUserPasswordByEmail(l.ctx, l.svcCtx.UsersModel, req.Email, req.Password); err != nil {
+	if err := userutils.ResetUserPasswordByEmail(l.ctx, l.svcCtx.UsersModel, req.Email, req.Password, l.svcCtx.Config.BcryptCost); err != nil {
 		l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("fail")
 		return nil, err
 	}
