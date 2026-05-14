@@ -56,10 +56,11 @@ func setupPasswordTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *mock.
 }
 
 func TestHashPassword_Success(t *testing.T) {
+	ctx := context.Background()
 	email := "test@example.com"
 	password := "password123"
 
-	hashed, err := HashPassword(email, password, 4)
+	hashed, err := HashPassword(ctx, email, password, 4)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, hashed)
@@ -67,21 +68,23 @@ func TestHashPassword_Success(t *testing.T) {
 }
 
 func TestHashPassword_EmptyPassword(t *testing.T) {
+	ctx := context.Background()
 	email := "test@example.com"
 	password := ""
 
-	hashed, err := HashPassword(email, password, 4)
+	hashed, err := HashPassword(ctx, email, password, 4)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, hashed) // 空密码也应该能生成哈�?
 }
 
 func TestHashPassword_InvalidCost(t *testing.T) {
+	ctx := context.Background()
 	email := "test@example.com"
 	password := "password123"
 
 	// cost 超出范围应该返回错误
-	hashed, err := HashPassword(email, password, 32)
+	hashed, err := HashPassword(ctx, email, password, 32)
 
 	assert.Error(t, err)
 	assert.Empty(t, hashed)
@@ -124,7 +127,7 @@ func TestResetUserPassword_SameAsOldPassword(t *testing.T) {
 	oldPassword := "OldPassword123!"
 
 	// 创建一个已有密码的用户
-	hashedOldPassword, _ := HashPassword(email, oldPassword, 4)
+	hashedOldPassword, _ := HashPassword(ctx, email, oldPassword, 4)
 	existingUser := &model.Users{
 		Id:           1,
 		SnowflakeId:  123456789,
@@ -282,34 +285,37 @@ func TestGetUserByEmail_DatabaseError(t *testing.T) {
 }
 
 func TestVerifyPasswordWithVagueMismatchErrHint_Success(t *testing.T) {
+	ctx := context.Background()
 	email := "test@example.com"
 	password := "password123"
-	hashedPassword, _ := HashPassword(email, password, 4)
+	hashedPassword, _ := HashPassword(ctx, email, password, 4)
 
-	err := VerifyPasswordWithVagueMismatchErrHint(hashedPassword, password, email)
+	err := VerifyPasswordWithVagueMismatchErrHint(ctx, hashedPassword, password, email)
 
 	assert.NoError(t, err)
 }
 
 func TestVerifyPasswordWithVagueMismatchErrHint_InvalidPassword(t *testing.T) {
+	ctx := context.Background()
 	email := "test@example.com"
 	password := "password123"
 	wrongPassword := "wrongpassword"
-	hashedPassword, _ := HashPassword(email, password, 4)
+	hashedPassword, _ := HashPassword(ctx, email, password, 4)
 
-	err := VerifyPasswordWithVagueMismatchErrHint(hashedPassword, wrongPassword, email)
+	err := VerifyPasswordWithVagueMismatchErrHint(ctx, hashedPassword, wrongPassword, email)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeUserNotExistOrPasswordIncorrect), "应该是用户不存在或密码错误")
 }
 
 func TestVerifyPasswordWithOldPasswordMismatchErrHint_InvalidPassword(t *testing.T) {
+	ctx := context.Background()
 	email := "test@example.com"
 	password := "password123"
 	wrongPassword := "wrongpassword"
-	hashedPassword, _ := HashPassword(email, password, 4)
+	hashedPassword, _ := HashPassword(ctx, email, password, 4)
 
-	err := VerifyPasswordWithOldPasswordMismatchErrHint(hashedPassword, wrongPassword, email)
+	err := VerifyPasswordWithOldPasswordMismatchErrHint(ctx, hashedPassword, wrongPassword, email)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeOldPasswordIncorrect), "应该是旧密码错误")

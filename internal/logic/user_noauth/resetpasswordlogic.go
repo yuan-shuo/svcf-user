@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"user/internal/logic/userutils"
+	"user/internal/metrics"
 	"user/internal/svc"
 	"user/internal/types"
 
@@ -33,19 +34,19 @@ func (l *ResetPasswordLogic) ResetPassword(req *types.ResetPasswordReq) (resp *t
 
 	// 检查验证码是否属于对应邮箱以及是否正确
 	if err := userutils.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx.Redis, req.Email, req.Code, codeType); err != nil {
-		l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("fail")
+		l.svcCtx.Metrics.PasswordChangesTotal.Inc(metrics.PasswordChangesTotalActionReset, metrics.PasswordChangesTotalStatusFailedOldPassword)
 		return nil, err
 	}
 
 	// 重置用户密码
 	if err := userutils.ResetUserPasswordByEmail(l.ctx, l.svcCtx.UsersModel, req.Email, req.Password, l.svcCtx.Config.BcryptCost); err != nil {
-		l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("fail")
+		l.svcCtx.Metrics.PasswordChangesTotal.Inc(metrics.PasswordChangesTotalActionReset, metrics.PasswordChangesTotalStatusFailedOldPassword)
 		return nil, err
 	}
 
 	// 标记已被使用
 	userutils.MarkCodeAsUsed(l.ctx, l.svcCtx.Redis, req.Email, codeType)
 
-	l.svcCtx.Metrics.AccountNoauth.PasswordResetsTotal.Inc("success")
+	l.svcCtx.Metrics.PasswordChangesTotal.Inc(metrics.PasswordChangesTotalActionReset, metrics.PasswordChangesTotalStatusSuccess)
 	return
 }

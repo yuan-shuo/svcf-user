@@ -24,7 +24,7 @@ type ServiceContext struct {
 	KqPusherClient      KqPusherClient                // 生产者实例
 	Redis               *redis.Redis                  // redis 数据库
 	UsersModel          model.UsersModel              // SQL 数据库
-	Metrics             *metrics.MetricsManager       // 观测指标
+	Metrics             *metrics.Metrics              // 观测指标
 	PeriodLimiterMgr    *limiter.PeriodLimiterManager // 周期限流器管理器
 	TokenLimiterMgr     *limiter.TokenLimiterManager  // 令牌桶限流器管理器
 	NoAuthLimit         rest.Middleware               // 无认证接口限流中间件
@@ -64,7 +64,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		),
 		Redis:               db.NewRedis(c.RedisConfig),
 		UsersModel:          model.NewUsersModel(db.NewPostgreSQL(c.PostgreSQL), c.CacheRedis),
-		Metrics:             metrics.NewMetricsManager(),
+		Metrics:             metrics.NewMetrics(),
 		PeriodLimiterMgr:    periodLimiterMgr,
 		TokenLimiterMgr:     tokenLimiterMgr,
 		NoAuthLimit:         middleware.NewNoAuthLimitMiddleware(periodLimiterMgr),

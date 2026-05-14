@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"user/internal/errs"
+	"user/internal/logger"
 
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
@@ -35,7 +35,7 @@ func VerifyEmailAndCodeInRedis(ctx context.Context, redisClient *redis.Redis, em
 	// 一次获取所有字段（Hgetall）
 	fields, err := redisClient.HgetallCtx(ctx, key)
 	if err != nil {
-		logx.Errorf("获取验证码信息失败, email=%s, key=%s, err=%v", email, key, err)
+		logger.L(ctx, "获取验证码信息失败").WEmail(email).WRedisKey(key).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 
@@ -61,6 +61,6 @@ func VerifyEmailAndCodeInRedis(ctx context.Context, redisClient *redis.Redis, em
 func MarkCodeAsUsed(ctx context.Context, redisClient *redis.Redis, email string, codeType string) {
 	key := BuildVerifyKey(email, codeType)
 	if err := redisClient.HsetCtx(ctx, key, RedisValueUsedFieldName, "1"); err != nil {
-		logx.Errorf("标记验证码已使用失败, email=%s, key=%s, err=%v", email, key, err)
+		logger.L(ctx, "标记验证码已使用失败").WEmail(email).WRedisKey(key).WErrorMsg(err.Error()).Errors()
 	}
 }

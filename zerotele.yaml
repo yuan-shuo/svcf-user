@@ -1,0 +1,205 @@
+# zerotele.yaml: 用户服务观测配置文件
+
+# 观测服务名
+service: user
+
+# 日志字段清单
+logfields:
+
+  # 错误相关字段
+  - name: error_msg
+    type: string
+    comment: 错误信息
+
+  - name: error_code
+    type: int
+    comment: 错误码
+
+  # 用户相关字段
+  - name: user_id
+    type: int64
+    mask: true
+    comment: 用户ID（雪花ID）
+
+  - name: email
+    type: string
+    mask: true
+    comment: 用户邮箱
+
+  - name: nickname
+    type: string
+    comment: 用户昵称
+
+  - name: uid
+    type: int64
+    mask: true
+    comment: 用户雪花ID（JWT中提取）
+
+  # 验证码相关字段
+  - name: code_type
+    type: string
+    comment: 验证码类型（register/reset_password/change_password）
+
+  - name: ttl
+    type: int64
+    comment: Redis key 剩余生存时间（秒）
+
+  - name: redis_key
+    type: string
+    mask: true
+    comment: Redis key（可能包含敏感信息）
+
+  # 密码相关字段
+  - name: bcrypt_cost
+    type: int
+    comment: bcrypt 加密成本参数
+
+  - name: mq_error
+    type: string
+    comment: 消息队列错误信息
+
+# 指标清单
+metrics:
+  # ==================== 用户注册指标 ====================
+  - name: user_registrations_total
+    help: 用户注册总数
+    type: counter
+    labels:
+      - name: source
+        vals: [app, web, admin]
+      - name: status
+        vals: [success, failed]
+    methods: [inc, add]
+
+  # ==================== 用户登录指标 ====================
+  - name: user_logins_total
+    help: 用户登录总数
+    type: counter
+    labels:
+      - name: source
+        vals: [app, web]
+      - name: status
+        vals: [success, failed_password, failed_not_found]
+    methods: [inc, add]
+
+  # ==================== 密码修改指标 ====================
+  - name: password_changes_total
+    help: 密码修改操作总数
+    type: counter
+    labels:
+      - name: action
+        vals: [change, reset]
+      - name: status
+        vals: [success, failed_old_password, failed_weak, failed_same]
+    methods: [inc, add]
+
+  # ==================== 验证码相关指标 ====================
+  - name: verify_code_sends_total
+    help: 验证码发送总数
+    type: counter
+    labels:
+      - name: code_type
+        vals: [register, reset_password, change_password]
+      - name: status
+        vals: [success, failed_rate_limit, failed_already_registered, failed_not_registered]
+    methods: [inc, add]
+
+  - name: verify_code_verifications_total
+    help: 验证码验证总数
+    type: counter
+    labels:
+      - name: code_type
+        vals: [register, reset_password, change_password]
+      - name: status
+        vals: [success, failed_invalid, failed_expired, failed_used]
+    methods: [inc, add]
+
+  - name: verify_code_rate_limit_hits_total
+    help: 验证码发送频率限制触发次数
+    type: counter
+    labels:
+      - name: code_type
+        vals: [register, reset_password, change_password]
+    methods: [inc]
+
+  # ==================== JWT/Token 指标 ====================
+  - name: token_operations_total
+    help: Token 操作总数
+    type: counter
+    labels:
+      - name: operation
+        vals: [generate_access, generate_refresh, parse_access, parse_refresh]
+      - name: status
+        vals: [success, failed]
+    methods: [inc, add]
+
+  - name: token_refresh_total
+    help: Token 刷新总数
+    type: counter
+    labels:
+      - name: status
+        vals: [success, failed_invalid, failed_expired, failed_user_not_found]
+    methods: [inc, add]
+
+  # ==================== 数据库操作指标 ====================
+  - name: db_operations_total
+    help: 数据库操作总数
+    type: counter
+    labels:
+      - name: operation
+        vals: [find_by_email, find_by_uid, insert, update]
+      - name: status
+        vals: [success, failed_not_found, failed_error]
+    methods: [inc, add]
+
+  # ==================== 业务错误指标 ====================
+  - name: business_errors_total
+    help: 业务错误总数
+    type: counter
+    labels:
+      - name: error_code
+        vals: ["*"]
+      - name: module
+        vals: [userutils, verifycode, redis, jwt, password]
+    methods: [inc, add]
+
+  # ==================== 消息队列指标 ====================
+  - name: mq_operations_total
+    help: 消息队列操作总数
+    type: counter
+    labels:
+      - name: operation
+        vals: [send_verify_code, send_remind_registered]
+      - name: status
+        vals: [success, failed]
+    methods: [inc, add]
+
+  # ==================== 性能指标 ====================
+  - name: request_duration_ms
+    help: 请求处理耗时（毫秒）
+    type: histogram
+    labels:
+      - name: handler
+        vals: [login, register, change_password, reset_password, send_verify_code, refresh_token]
+    buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+    methods: [observe]
+
+  # ==================== 连接池指标 ====================
+  - name: active_db_connections
+    help: 当前活跃的数据库连接数
+    type: gauge
+    labels:
+      - name: pool
+        vals: [default]
+    methods: [set, inc, dec]
+
+  # ==================== 限流指标 ====================
+  - name: rate_limit_hits_total
+    help: 限流触发总数
+    type: counter
+    labels:
+      - name: limiter_type
+        vals: [token, period]
+      - name: key
+        vals: ["*"]
+    methods: [inc, add]

@@ -50,38 +50,41 @@ func setupVerifyCodeTest(t *testing.T) (*miniredis.Miniredis, *redis.Redis, *moc
 // ==================== ValidateVerifyCodeRequest 测试 ====================
 
 func TestValidateVerifyCodeRequest_Success(t *testing.T) {
+	ctx := context.Background()
 	cfg := config.VerifyCodeType{
 		Register:       "register",
 		ResetPassword:  "reset_password",
 		ChangePassword: "change_password",
 	}
 
-	err := ValidateVerifyCodeRequest("test@example.com", "register", cfg)
+	err := ValidateVerifyCodeRequest(ctx, "test@example.com", "register", cfg)
 
 	assert.NoError(t, err)
 }
 
 func TestValidateVerifyCodeRequest_InvalidType(t *testing.T) {
+	ctx := context.Background()
 	cfg := config.VerifyCodeType{
 		Register:       "register",
 		ResetPassword:  "reset_password",
 		ChangePassword: "change_password",
 	}
 
-	err := ValidateVerifyCodeRequest("test@example.com", "invalid_type", cfg)
+	err := ValidateVerifyCodeRequest(ctx, "test@example.com", "invalid_type", cfg)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidParam))
 }
 
 func TestValidateVerifyCodeRequest_InvalidEmail(t *testing.T) {
+	ctx := context.Background()
 	cfg := config.VerifyCodeType{
 		Register:       "register",
 		ResetPassword:  "reset_password",
 		ChangePassword: "change_password",
 	}
 
-	err := ValidateVerifyCodeRequest("invalid-email", "register", cfg)
+	err := ValidateVerifyCodeRequest(ctx, "invalid-email", "register", cfg)
 
 	assert.Error(t, err)
 	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidParam))

@@ -9,25 +9,26 @@ import (
 
 	"user/internal/config"
 	"user/internal/errs"
+	"user/internal/logger"
 	"user/internal/model"
 	"user/internal/svc"
 	"user/internal/types"
 	"user/internal/utils"
 
-	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/logc"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 )
 
 // ValidateVerifyCodeRequest 验证发送验证码请求参数
-func ValidateVerifyCodeRequest(email, codeType string, validTypes config.VerifyCodeType) error {
+func ValidateVerifyCodeRequest(ctx context.Context, email, codeType string, validTypes config.VerifyCodeType) error {
 	if !IsValidCodeType(codeType, validTypes) {
-		logx.Errorf("无效的验证码请求类型, type=%s", codeType)
+		logger.L(ctx, "无效的验证码请求类型").WCodeType(codeType).Errors()
 		return errs.New(errs.CodeInvalidParam)
 	}
 
 	if _, err := mail.ParseAddress(email); err != nil {
-		logx.Errorf("邮箱格式不正确, email=%s, err=%v", email, err)
+		logger.L(ctx, "邮箱格式不正确").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInvalidParam)
 	}
 
@@ -47,14 +48,14 @@ func CheckRateLimit(ctx context.Context, redisClient *redis.Redis, retryAfter in
 	// 保证原子性
 	ok, err := redisClient.SetnxExCtx(ctx, limitKey, "1", retryAfter)
 	if err != nil {
-		logx.Errorf("限流检查失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "限流检查失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 
 	if !ok {
 		// key已存在，获取剩余时间
 		ttl, _ := redisClient.Ttl(limitKey)
-		logx.Errorf("发送过于频繁, email=%s, ttl=%d", email, ttl)
+		logger.L(ctx, "发送过于频繁").WEmail(email).WTtl(int64(ttl)).Errors()
 		return errs.New(errs.CodeInvalidParam, fmt.Sprintf("发送过于频繁，请%d秒后重试", ttl))
 	}
 
@@ -68,14 +69,14 @@ func CheckRegisterLogic(ctx context.Context, usersModel model.UsersModel, mqClie
 	if err == nil {
 		// 邮箱已存在，发送提醒邮件，不发送验证码
 		if mqErr := SendVerifyCodeToMQ(ctx, mqClient, email, "", remindRegisteredType); mqErr != nil {
-			logx.Errorf("发送已注册提醒邮件失败, email=%s, err=%v", email, mqErr)
+			logger.L(ctx, "发送已注册提醒邮件失败").WEmail(email).WMqError(mqErr.Error()).Errors()
 			return false, errs.New(errs.CodeInternalError)
 		}
 		// 不继续发送验证码，但也不返回错误
 		return false, nil
 	}
 	if err != sqlx.ErrNotFound {
-		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "查询邮箱是否注册失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return false, errs.New(errs.CodeInternalError)
 	}
 	// 邮箱未注册，继续发送验证码
@@ -91,7 +92,7 @@ func CheckResetPasswordLogic(ctx context.Context, usersModel model.UsersModel, e
 		return false, errs.New(errs.CodeEmailNotRegistered)
 	}
 	if err != nil {
-		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "查询邮箱是否注册失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return false, errs.New(errs.CodeInternalError)
 	}
 	// 邮箱存在，继续发送验证码
@@ -106,7 +107,7 @@ func GenerateAndSaveVerifyCode(ctx context.Context, redisClient *redis.Redis, ex
 	// 1. 创建 TxPipeline，并处理可能的错误
 	pipe, err := redisClient.TxPipeline()
 	if err != nil {
-		logx.Errorf("创建 Redis Pipeline 失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "创建 Redis Pipeline 失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return ""
 	}
 
@@ -117,7 +118,7 @@ func GenerateAndSaveVerifyCode(ctx context.Context, redisClient *redis.Redis, ex
 
 	// 3. 执行管道命令
 	if _, err := pipe.Exec(ctx); err != nil {
-		logx.Errorf("验证码缓存失败（执行 Pipeline 失败）, email=%s, err=%v", email, err)
+		logger.L(ctx, "验证码缓存失败（执行 Pipeline 失败）").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return ""
 	}
 
@@ -135,12 +136,12 @@ func SendVerifyCodeToMQ(ctx context.Context, mqClient svc.KqPusherClient, email,
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		logx.Errorf("消息序列化失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "消息序列化失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 
 	if err := mqClient.Push(ctx, string(msgBytes)); err != nil {
-		logx.Errorf("消息队列推送失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "消息队列推送失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 
@@ -151,7 +152,10 @@ func SendVerifyCodeToMQ(ctx context.Context, mqClient svc.KqPusherClient, email,
 func CleanupRateLimit(ctx context.Context, redisClient *redis.Redis, email, codeType string) {
 	limitKey := BuildLimitKey(email, codeType)
 	if _, err := redisClient.DelCtx(ctx, limitKey); err != nil {
-		logx.Errorf("清理限流标记失败, email=%s, err=%v", email, err)
+		logc.Errorw(ctx, "清理限流标记失败",
+			logger.WEmail(email),
+			logger.WErrorMsg(err.Error()),
+		)
 	}
 }
 
@@ -159,7 +163,10 @@ func CleanupRateLimit(ctx context.Context, redisClient *redis.Redis, email, code
 func CleanupVerifyCode(ctx context.Context, redisClient *redis.Redis, email, codeType string) {
 	verifyKey := BuildVerifyKey(email, codeType)
 	if _, err := redisClient.DelCtx(ctx, verifyKey); err != nil {
-		logx.Errorf("清理验证码数据失败, email=%s, err=%v", email, err)
+		logc.Errorw(ctx, "清理验证码数据失败",
+			logger.WEmail(email),
+			logger.WErrorMsg(err.Error()),
+		)
 	}
 }
 

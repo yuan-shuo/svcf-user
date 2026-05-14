@@ -5,31 +5,31 @@ import (
 	"database/sql"
 	"errors"
 	"user/internal/errs"
+	"user/internal/logger"
 	"user/internal/model"
 	"user/internal/utils"
 
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/sqlx"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // 密码校验函数: 模糊错误返回
-func VerifyPasswordWithVagueMismatchErrHint(hashedPassword, password, email string) error {
-	return verifyPassword(hashedPassword, password, email, errs.New(errs.CodeUserNotExistOrPasswordIncorrect))
+func VerifyPasswordWithVagueMismatchErrHint(ctx context.Context, hashedPassword, password, email string) error {
+	return verifyPassword(ctx, hashedPassword, password, email, errs.New(errs.CodeUserNotExistOrPasswordIncorrect))
 }
 
 // 密码校验函数: 旧密码错误返回
-func VerifyPasswordWithOldPasswordMismatchErrHint(hashedPassword, password, email string) error {
-	return verifyPassword(hashedPassword, password, email, errs.New(errs.CodeOldPasswordIncorrect))
+func VerifyPasswordWithOldPasswordMismatchErrHint(ctx context.Context, hashedPassword, password, email string) error {
+	return verifyPassword(ctx, hashedPassword, password, email, errs.New(errs.CodeOldPasswordIncorrect))
 }
 
 // 密码校验函数
-func verifyPassword(hashedPassword, password, email string, mismatchErrHint error) error {
+func verifyPassword(ctx context.Context, hashedPassword, password, email string, mismatchErrHint error) error {
 	if err := utils.ComparePassword(hashedPassword, password); err != nil {
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
 			return mismatchErrHint
 		}
-		logx.Errorf("用户登录密码校验失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "用户登录密码校验失败").WErrorMsg(err.Error()).WEmail(email).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 	return nil
@@ -44,23 +44,23 @@ func ValidatePasswordStrength(password string) error {
 	return nil
 }
 
-func HashPassword(email, password string, cost int) (string, error) {
+func HashPassword(ctx context.Context, email, password string, cost int) (string, error) {
 	hashedPassword, err := utils.HashPassword(password, cost)
 	if err != nil {
 		// 类型断言判断是否是 InvalidCostError
 		if _, ok := err.(bcrypt.InvalidCostError); ok {
 			// 这里后面应该搞个promtheus-warn指标之类的做提醒，毕竟不能panic连坐其他接口，但还得有提醒
-			logx.Errorf("bcrypt cost 配置错误, cost=%d, err=%v", cost, err)
+			logger.L(ctx, "bcrypt cost 配置错误").WBcryptCost(cost).WErrorMsg(err.Error()).Errors()
 			return "", errs.New(errs.CodeInternalError)
 		}
 
-		logx.Errorf("密码加密失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "密码加密失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return "", errs.New(errs.CodeInternalError)
 	}
 	return hashedPassword, nil
 }
 
-// ResetUserPassword 重置用户密码
+// ResetUserPasswordByEmail 重置用户密码
 func ResetUserPasswordByEmail(ctx context.Context, usersModel model.UsersModel, email, newPassword string, bcryptCost int) error {
 	// 获取用户
 	user, err := GetUserByEmail(ctx, usersModel, email)
@@ -78,7 +78,7 @@ func GetUserByUid(ctx context.Context, usersModel model.UsersModel, uid int64) (
 		if err == model.ErrNotFound {
 			return nil, errs.New(errs.CodeUserNotFound)
 		}
-		logx.Errorf("基于UID获取用户实例失败, uid=%d, err=%v", uid, err)
+		logger.L(ctx, "基于UID获取用户实例失败").WUid(uid).WErrorMsg(err.Error()).Errors()
 		return nil, errs.New(errs.CodeInternalError)
 	}
 	return user, nil
@@ -88,7 +88,7 @@ func GetUserByUid(ctx context.Context, usersModel model.UsersModel, uid int64) (
 func GetUserByAccessJwtCtx(ctx context.Context, usersModel model.UsersModel) (*model.Users, error) {
 	uid, err := utils.UIDFromAccessToken(ctx)
 	if err != nil {
-		logx.Errorf("从JWT中提取用户ID失败, err=%v", err)
+		logger.L(ctx, "从JWT中提取用户ID失败").WErrorMsg(err.Error()).Errors()
 		return nil, errs.New(errs.CodeInternalError)
 	}
 	return GetUserByUid(ctx, usersModel, uid)
@@ -98,7 +98,7 @@ func GetUserByAccessJwtCtx(ctx context.Context, usersModel model.UsersModel) (*m
 func GetUserByRefreshJwtCtx(ctx context.Context, usersModel model.UsersModel) (*model.Users, error) {
 	uid, err := utils.UIDFromRefreshToken(ctx)
 	if err != nil {
-		logx.Errorf("从JWT中提取用户ID失败, err=%v", err)
+		logger.L(ctx, "从JWT中提取用户ID失败").WErrorMsg(err.Error()).Errors()
 		return nil, errs.New(errs.CodeInternalError)
 	}
 	return GetUserByUid(ctx, usersModel, uid)
@@ -111,7 +111,7 @@ func GetUserByEmail(ctx context.Context, usersModel model.UsersModel, email stri
 		if err == model.ErrNotFound {
 			return nil, errs.New(errs.CodeUserNotFound)
 		}
-		logx.Errorf("基于邮箱获取用户实例失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "基于邮箱获取用户实例失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return nil, errs.New(errs.CodeInternalError)
 	}
 	return user, nil
@@ -126,7 +126,7 @@ func CheckEmailNotRegistered(ctx context.Context, usersModel model.UsersModel, e
 	}
 	if err != sqlx.ErrNotFound {
 		// 数据库查询出错
-		logx.Errorf("查询邮箱是否注册失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "查询邮箱是否注册失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 	// 未找到，说明邮箱未注册
@@ -137,7 +137,7 @@ func CheckEmailNotRegistered(ctx context.Context, usersModel model.UsersModel, e
 func CreateUser(ctx context.Context, usersModel model.UsersModel, nickname, email, hashedPassword string) error {
 	snowflakeId, err := utils.GenerateID()
 	if err != nil {
-		logx.Errorf("雪花id生成失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "雪花id生成失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 	_, err = usersModel.Insert(ctx, &model.Users{
@@ -148,7 +148,7 @@ func CreateUser(ctx context.Context, usersModel model.UsersModel, nickname, emai
 		DeletedAt:    sql.NullTime{Valid: false},
 	})
 	if err != nil {
-		logx.Errorf("数据库创建用户失败, email=%s, err=%v", email, err)
+		logger.L(ctx, "数据库创建用户失败").WEmail(email).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 	return nil
@@ -166,7 +166,7 @@ func ResetUserPassword(ctx context.Context, usersModel model.UsersModel, user *m
 		return errs.New(errs.CodePasswordSameAsOld)
 	}
 
-	newHashedPassword, err := HashPassword(user.Email, newPassword, bcryptCost)
+	newHashedPassword, err := HashPassword(ctx, user.Email, newPassword, bcryptCost)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func ResetUserPassword(ctx context.Context, usersModel model.UsersModel, user *m
 	user.PasswordHash = newHashedPassword
 	// 更新数据库密码
 	if err := usersModel.Update(ctx, user); err != nil {
-		logx.Errorf("重设用户密码实败, email=%s, err=%v", user.Email, err)
+		logger.L(ctx, "重设用户密码失败").WEmail(user.Email).WErrorMsg(err.Error()).Errors()
 		return errs.New(errs.CodeInternalError)
 	}
 

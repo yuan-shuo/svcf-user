@@ -252,6 +252,7 @@ func TestGetUserByRefreshToken_UserNotFound(t *testing.T) {
 
 func TestGetAccessTokenClaimsByJWT_Success(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
 	token, err := utils.GenerateAccessToken(
 		svcCtx.Config.Auth.AccessSecret,
@@ -262,7 +263,7 @@ func TestGetAccessTokenClaimsByJWT_Success(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	claims, err := GetAccessTokenClaimsByJWT(token, svcCtx.Config.Auth.AccessSecret)
+	claims, err := GetAccessTokenClaimsByJWT(ctx, token, svcCtx.Config.Auth.AccessSecret)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, claims)
@@ -274,8 +275,9 @@ func TestGetAccessTokenClaimsByJWT_Success(t *testing.T) {
 
 func TestGetAccessTokenClaimsByJWT_InvalidToken(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
-	claims, err := GetAccessTokenClaimsByJWT("invalid-token", svcCtx.Config.Auth.AccessSecret)
+	claims, err := GetAccessTokenClaimsByJWT(ctx, "invalid-token", svcCtx.Config.Auth.AccessSecret)
 
 	assert.Error(t, err)
 	assert.Nil(t, claims)
@@ -284,6 +286,7 @@ func TestGetAccessTokenClaimsByJWT_InvalidToken(t *testing.T) {
 
 func TestGetAccessTokenClaimsByJWT_WrongSecret(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
 	token, _ := utils.GenerateAccessToken(
 		svcCtx.Config.Auth.AccessSecret,
@@ -293,7 +296,7 @@ func TestGetAccessTokenClaimsByJWT_WrongSecret(t *testing.T) {
 		"test@example.com",
 	)
 
-	claims, err := GetAccessTokenClaimsByJWT(token, "wrong-secret")
+	claims, err := GetAccessTokenClaimsByJWT(ctx, token, "wrong-secret")
 
 	assert.Error(t, err)
 	assert.Nil(t, claims)
@@ -302,6 +305,7 @@ func TestGetAccessTokenClaimsByJWT_WrongSecret(t *testing.T) {
 
 func TestGetAccessTokenClaimsByJWT_Expired(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
 	// 生成已过期的 token
 	token, _ := utils.GenerateAccessToken(
@@ -312,7 +316,7 @@ func TestGetAccessTokenClaimsByJWT_Expired(t *testing.T) {
 		"test@example.com",
 	)
 
-	claims, err := GetAccessTokenClaimsByJWT(token, svcCtx.Config.Auth.AccessSecret)
+	claims, err := GetAccessTokenClaimsByJWT(ctx, token, svcCtx.Config.Auth.AccessSecret)
 
 	assert.Error(t, err)
 	assert.Nil(t, claims)
@@ -323,6 +327,7 @@ func TestGetAccessTokenClaimsByJWT_Expired(t *testing.T) {
 
 func TestGetRefreshTokenClaimsByJWT_Success(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
 	token, err := utils.GenerateRefreshToken(
 		svcCtx.Config.RefreshSecret,
@@ -331,7 +336,7 @@ func TestGetRefreshTokenClaimsByJWT_Success(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	claims, err := GetRefreshTokenClaimsByJWT(token, svcCtx.Config.RefreshSecret)
+	claims, err := GetRefreshTokenClaimsByJWT(ctx, token, svcCtx.Config.RefreshSecret)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, claims)
@@ -341,8 +346,9 @@ func TestGetRefreshTokenClaimsByJWT_Success(t *testing.T) {
 
 func TestGetRefreshTokenClaimsByJWT_InvalidToken(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
-	claims, err := GetRefreshTokenClaimsByJWT("invalid-token", svcCtx.Config.RefreshSecret)
+	claims, err := GetRefreshTokenClaimsByJWT(ctx, "invalid-token", svcCtx.Config.RefreshSecret)
 
 	assert.Error(t, err)
 	assert.Nil(t, claims)
@@ -351,6 +357,7 @@ func TestGetRefreshTokenClaimsByJWT_InvalidToken(t *testing.T) {
 
 func TestGetRefreshTokenClaimsByJWT_WrongTokenType(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
 	// 使用 access token 尝试解析为 refresh token
 	token, _ := utils.GenerateAccessToken(
@@ -361,7 +368,7 @@ func TestGetRefreshTokenClaimsByJWT_WrongTokenType(t *testing.T) {
 		"test@example.com",
 	)
 
-	claims, err := GetRefreshTokenClaimsByJWT(token, svcCtx.Config.RefreshSecret)
+	claims, err := GetRefreshTokenClaimsByJWT(ctx, token, svcCtx.Config.RefreshSecret)
 
 	assert.Error(t, err)
 	assert.Nil(t, claims)
@@ -398,6 +405,7 @@ func TestGetEmailByJwtCtx_ClaimsNotFound(t *testing.T) {
 
 func TestGenerateAccessToken_Wrapper_Success(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
 	user := &model.Users{
 		Id:           1,
@@ -407,7 +415,7 @@ func TestGenerateAccessToken_Wrapper_Success(t *testing.T) {
 		PasswordHash: "hashedpassword",
 	}
 
-	token, err := GenerateAccessToken(svcCtx.Config, user)
+	token, err := GenerateAccessToken(ctx, svcCtx.Config, user)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, token)
@@ -423,6 +431,7 @@ func TestGenerateAccessToken_Wrapper_Success(t *testing.T) {
 
 func TestGenerateRefreshToken_Wrapper_Success(t *testing.T) {
 	_, _, _, svcCtx := setupJwtTest(t)
+	ctx := context.Background()
 
 	user := &model.Users{
 		Id:           1,
@@ -432,7 +441,7 @@ func TestGenerateRefreshToken_Wrapper_Success(t *testing.T) {
 		PasswordHash: "hashedpassword",
 	}
 
-	token, err := GenerateRefreshToken(svcCtx.Config, user)
+	token, err := GenerateRefreshToken(ctx, svcCtx.Config, user)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, token)
