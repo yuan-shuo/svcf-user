@@ -6,11 +6,8 @@ microservice frame of user function: 用户微服务框架
 
 ## 更新计划
 
-1. 统一日志处理
-2. 指标
-3. 错误处理
-4. 文档
-5. 可能存在的优化
+1. 指标
+2. 可能存在的优化
 
 ## 核心模块
 
@@ -38,13 +35,17 @@ go run ./cmd/migrate
 goctl model pg datasource -url="postgres://username:123456@127.0.0.1:5432/user_db?sslmode=disable" -table="users" -dir="./internal/model" -cache
 ```
 
-### prom指标代码
+### 日志、指标代码
 
 ```bash
-go install github.com/yuan-shuo/gometrics@latest
-gometrics -f metrics.yaml -d ./internal/metrics
+# 工具安装
+go install github.com/yuan-shuo/zerotele@latest
+# 日志字段代码生成
+zerotele lf zerotele.yaml -d ./internal/logger -m mask.go
+# 指标管理器代码生成
+zerotele met zerotele.yaml -d ./internal/metrics
 ```
 
 ## 牢骚
 
-jwt 退出登录直接前端自己删 localstorage，别搞 redis 黑名单没用还复古 session 加 http 网关
+jwt 退出登录直接前端自己删 localstorage（好像要用cookie的什么httpOnly？从网上听的不知道要不要改动前端），别搞 redis 黑名单没用还复古 session 加 http 网关
