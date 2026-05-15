@@ -61,6 +61,11 @@ SmtpConfig:
 
 # --- 以下配置，如果是用容器跑的，不太需要有改动了 ---
 
+# bcrypt 加密成本因子，取值范围 4-31
+# 生产环境建议 12，开发环境可用 5 加快速度
+# 测试 cost 不取 4 是因为: 如果 config 读取错误, cost会为0, 经过 ensure 调整后自动为 4 无法辨识是否生效
+BcryptCost: 5
+
 # kafka消费者配置
 KqConsumerConf:
 
@@ -122,10 +127,6 @@ VerifyCodeConfig:
     ExpireIn: 300 # 验证码有效期时间，单位：秒
     RetryAfter: 60 # 验证码请求间隔时间，单位：秒
 
-  # 验证码redis数据库配置
-  Redis:
-    KeyPrefix: account # 验证码redis数据库键的前缀
-
 # prometheus 配置
 Prometheus:
   Host: 0.0.0.0
@@ -148,7 +149,7 @@ RateLimit:
   # 未认证接口限流配置（周期限流 - 固定窗口）
   NoAuth:
     Period: 3600 # 限流周期，单位：秒
-    Quota: 1000 # 限流阈值，单位：次
+    Quota: 100 # 限流阈值，单位：次 (所有使用noauth限流器的接口共享此次数, 例如登录、注册、验证码发送等操作次数之和每小时不能超过100次)
 
   # 刷新token接口限流配置（令牌桶限流）
   RefreshToken:

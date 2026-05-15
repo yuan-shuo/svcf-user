@@ -1,0 +1,1 @@
+goctl api ts --api user.api --dir tscode

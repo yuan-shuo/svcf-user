@@ -8,8 +8,8 @@ import (
 
 func TestGetTestMetrics(t *testing.T) {
 	t.Run("首次调用返回非nil实例", func(t *testing.T) {
-		metrics := GetTestMetrics()
-		assert.NotNil(t, metrics)
+		m := GetTestMetrics()
+		assert.NotNil(t, m)
 	})
 
 	t.Run("多次调用返回同一实例", func(t *testing.T) {
@@ -19,31 +19,22 @@ func TestGetTestMetrics(t *testing.T) {
 		assert.Same(t, metrics1, metrics2)
 	})
 
-	t.Run("返回的MetricsManager包含所有子系统", func(t *testing.T) {
-		metrics := GetTestMetrics()
-		assert.NotNil(t, metrics.Account)
-		assert.NotNil(t, metrics.AccountNoauth)
-		assert.NotNil(t, metrics.Verifycode)
-	})
-
-	t.Run("Account子系统包含所有计数器", func(t *testing.T) {
-		metrics := GetTestMetrics()
-		assert.NotNil(t, metrics.Account.PasswordChangesTotal)
-	})
-
-	t.Run("AccountNoauth子系统包含所有计数器", func(t *testing.T) {
-		metrics := GetTestMetrics()
-		assert.NotNil(t, metrics.AccountNoauth.LoginsTotal)
-		assert.NotNil(t, metrics.AccountNoauth.RegistrationsTotal)
-		assert.NotNil(t, metrics.AccountNoauth.PasswordResetsTotal)
-		assert.NotNil(t, metrics.AccountNoauth.TokenRefreshesTotal)
-	})
-
-	t.Run("Verifycode子系统包含所有计数器", func(t *testing.T) {
-		metrics := GetTestMetrics()
-		assert.NotNil(t, metrics.Verifycode.CodesSentTotal)
-		assert.NotNil(t, metrics.Verifycode.CodeVerificationsTotal)
-		assert.NotNil(t, metrics.Verifycode.RateLimitHitsTotal)
+	t.Run("返回的Metrics包含所有计数器", func(t *testing.T) {
+		m := GetTestMetrics()
+		assert.NotNil(t, m.UserRegistrationsTotal)
+		assert.NotNil(t, m.UserLoginsTotal)
+		assert.NotNil(t, m.PasswordChangesTotal)
+		assert.NotNil(t, m.VerifyCodeSendsTotal)
+		assert.NotNil(t, m.VerifyCodeVerificationsTotal)
+		assert.NotNil(t, m.VerifyCodeRateLimitHitsTotal)
+		assert.NotNil(t, m.TokenOperationsTotal)
+		assert.NotNil(t, m.TokenRefreshTotal)
+		assert.NotNil(t, m.DbOperationsTotal)
+		assert.NotNil(t, m.BusinessErrorsTotal)
+		assert.NotNil(t, m.MqOperationsTotal)
+		assert.NotNil(t, m.RequestDurationMs)
+		assert.NotNil(t, m.ActiveDbConnections)
+		assert.NotNil(t, m.RateLimitHitsTotal)
 	})
 }
 

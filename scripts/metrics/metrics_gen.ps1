@@ -1,1 +1,0 @@
-gometrics -f metrics.yaml -d ./internal/metrics

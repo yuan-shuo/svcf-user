@@ -1,0 +1,52 @@
+// Code scaffolded by goctl. Safe to edit.
+// goctl 1.9.2
+
+package user_noauth
+
+import (
+	"context"
+
+	"user/internal/logic/userutils"
+	"user/internal/metrics"
+	"user/internal/svc"
+	"user/internal/types"
+
+	"github.com/zeromicro/go-zero/core/logx"
+)
+
+type ResetPasswordLogic struct {
+	logx.Logger
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+}
+
+func NewResetPasswordLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ResetPasswordLogic {
+	return &ResetPasswordLogic{
+		Logger: logx.WithContext(ctx),
+		ctx:    ctx,
+		svcCtx: svcCtx,
+	}
+}
+
+func (l *ResetPasswordLogic) ResetPassword(req *types.ResetPasswordReq) (resp *types.ResetPasswordResp, err error) {
+	// 所需验证码类型 - 重置密码
+	codeType := l.svcCtx.Config.VerifyCodeConfig.Type.ResetPassword
+
+	// 检查验证码是否属于对应邮箱以及是否正确
+	if err := userutils.VerifyEmailAndCodeInRedis(l.ctx, l.svcCtx.Redis, req.Email, req.Code, codeType); err != nil {
+		l.svcCtx.Metrics.PasswordChangesTotal.Inc(metrics.PasswordChangesTotalActionReset, metrics.PasswordChangesTotalStatusFailedOldPassword)
+		return nil, err
+	}
+
+	// 重置用户密码
+	if err := userutils.ResetUserPasswordByEmail(l.ctx, l.svcCtx.UsersModel, req.Email, req.Password, l.svcCtx.Config.BcryptCost); err != nil {
+		l.svcCtx.Metrics.PasswordChangesTotal.Inc(metrics.PasswordChangesTotalActionReset, metrics.PasswordChangesTotalStatusFailedOldPassword)
+		return nil, err
+	}
+
+	// 标记已被使用
+	userutils.MarkCodeAsUsed(l.ctx, l.svcCtx.Redis, req.Email, codeType)
+
+	l.svcCtx.Metrics.PasswordChangesTotal.Inc(metrics.PasswordChangesTotalActionReset, metrics.PasswordChangesTotalStatusSuccess)
+	return
+}

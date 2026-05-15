@@ -4,8 +4,8 @@ syntax = "v1"
 // goctl api validate --api user.api
 // goctl api ts --api user.api --dir tscode
 @server (
-	group:      account
-	prefix:     api/account/v1
+	group:      user
+	prefix:     api/user/v1
 	jwt:        Auth
 	middleware: ChangePasswordLimit
 )
@@ -17,8 +17,8 @@ service user-api {
 
 // 无认证服务接口
 @server (
-	group:      account_noauth
-	prefix:     api/account/v1/noauth
+	group:      user_noauth
+	prefix:     api/user/v1/noauth
 	middleware: NoAuthLimit
 )
 service user-api {
@@ -41,8 +41,8 @@ service user-api {
 
 // 刷新 token 接口 - 单独限流
 @server (
-	group:      account_noauth
-	prefix:     api/account/v1/noauth
+	group:      user_noauth
+	prefix:     api/user/v1/noauth
 	middleware: RefreshTokenLimit
 )
 service user-api {

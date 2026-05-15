@@ -20,14 +20,16 @@ import (
 )
 
 type ServiceContext struct {
-	Config              config.Config           // 配置文件
-	KqPusherClient      KqPusherClient          // 生产者实例
-	Redis               *redis.Redis            // redis 数据库
-	UsersModel          model.UsersModel        // SQL 数据库
-	Metrics             *metrics.MetricsManager // 观测指标
-	NoAuthLimit         rest.Middleware         // 无认证接口限流中间件
-	RefreshTokenLimit   rest.Middleware         // 刷新token接口限流中间件
-	ChangePasswordLimit rest.Middleware         // 修改密码接口限流中间件
+	Config              config.Config                 // 配置文件
+	KqPusherClient      KqPusherClient                // 生产者实例
+	Redis               *redis.Redis                  // redis 数据库
+	UsersModel          model.UsersModel              // SQL 数据库
+	Metrics             *metrics.Metrics              // 观测指标
+	PeriodLimiterMgr    *limiter.PeriodLimiterManager // 周期限流器管理器
+	TokenLimiterMgr     *limiter.TokenLimiterManager  // 令牌桶限流器管理器
+	NoAuthLimit         rest.Middleware               // 无认证接口限流中间件
+	RefreshTokenLimit   rest.Middleware               // 刷新token接口限流中间件
+	ChangePasswordLimit rest.Middleware               // 修改密码接口限流中间件
 }
 
 // 定义为接口方便单元测试
@@ -45,10 +47,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 初始化限流器redis数据库
 	rateLimiterRedis := db.NewRedis(c.RateLimit.RedisConfig)
-	// 初始化限流器
-	noAuthLimiter := limiter.NewNoAuthPeriodLimiter(c, rateLimiterRedis)                 // 未认证接口限流器
-	refreshTokenLimiter := limiter.NewRefreshTokenLimiter(c, rateLimiterRedis)           // 刷新token接口限流器
-	changePasswordLimiter := limiter.NewChangePasswordPeriodLimiter(c, rateLimiterRedis) // 修改密码接口限流器
+	// 初始化限流器管理器
+	periodLimiterMgr := limiter.NewPeriodLimiterManager(c, rateLimiterRedis) // 周期限流器管理器
+	tokenLimiterMgr := limiter.NewTokenLimiterManager(c, rateLimiterRedis)   // 令牌桶限流器管理器
 
 	// 返回上下文
 	return &ServiceContext{
@@ -63,9 +64,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		),
 		Redis:               db.NewRedis(c.RedisConfig),
 		UsersModel:          model.NewUsersModel(db.NewPostgreSQL(c.PostgreSQL), c.CacheRedis),
-		Metrics:             metrics.NewMetricsManager(),
-		NoAuthLimit:         middleware.NewNoAuthLimitMiddleware(noAuthLimiter),
-		RefreshTokenLimit:   middleware.NewRefreshTokenLimitMiddleware(refreshTokenLimiter),
-		ChangePasswordLimit: middleware.NewChangePasswordLimitMiddleware(changePasswordLimiter),
+		Metrics:             metrics.NewMetrics(),
+		PeriodLimiterMgr:    periodLimiterMgr,
+		TokenLimiterMgr:     tokenLimiterMgr,
+		NoAuthLimit:         middleware.NewNoAuthLimitMiddleware(periodLimiterMgr),
+		RefreshTokenLimit:   middleware.NewRefreshTokenLimitMiddleware(tokenLimiterMgr),
+		ChangePasswordLimit: middleware.NewChangePasswordLimitMiddleware(periodLimiterMgr),
 	}
 }

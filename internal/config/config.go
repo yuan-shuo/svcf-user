@@ -11,8 +11,6 @@ import (
 )
 
 type Config struct {
-	// Register Register
-
 	KqConsumerConf kq.KqConf // 消息队列消费者配置
 
 	SmtpConfig SmtpConfig // 邮件发送配置
@@ -25,14 +23,13 @@ type Config struct {
 	Auth          Auth   // jwt认证配置
 	RefreshSecret string // Refresh Token 签名密钥
 	RefreshExpire int64  // Refresh Token 有效期
+	BcryptCost    int    // bcrypt 加密成本因子，取值范围 4-31
 
 	VerifyCodeConfig VerifyCodeConfig // 验证码配置
 
 	RateLimit RateLimit // 限流配置
 
 	rest.RestConf
-
-	// KqPusherConf   KqPusherConf
 }
 
 // 限流配置
@@ -58,14 +55,8 @@ type TokenLimit struct {
 
 // 验证码配置
 type VerifyCodeConfig struct {
-	Type  VerifyCodeType        // 验证码类型
-	Time  VerifyCodeTime        // 验证码有效期
-	Redis VerifyCodeRedisConfig // redis配置
-}
-
-// 验证码redis配置
-type VerifyCodeRedisConfig struct {
-	KeyPrefix string // 存放于redis时使用的键名前缀, 给入a则redis.key=a:receiver_email
+	Type VerifyCodeType // 验证码类型
+	Time VerifyCodeTime // 验证码有效期
 }
 
 type VerifyCodeTime struct {
@@ -100,25 +91,6 @@ type PostgreSQLPool struct {
 	ConnMaxIdleTime int // 连接最大空闲时间(秒)，默认600秒(10分钟)
 }
 
-// // 注册配置
-// type Register struct {
-// 	SendCodeConfig SendCodeConfig
-// }
-
-// // 验证码发送配置
-// type SendCodeConfig struct {
-// 	// ReceiveType    string // 接收验证码类型
-// 	// ExpireIn       int
-// 	// RetryAfter     int
-// 	// RedisKeyPrefix string // 存放于redis时使用的键名前缀, 给入a则redis.key=a:receiver_email
-// 	// ReminderType ReminderType
-// }
-
-// // 提醒类型消息
-// type ReminderType struct {
-// 	Registered string // 邮箱已注册
-// }
-
 // 邮件发送配置
 type SmtpConfig struct {
 	Host     string
@@ -127,9 +99,3 @@ type SmtpConfig struct {
 	Password string
 	From     string
 }
-
-// // 消息队列生产者配置 暂时废弃
-// type KqPusherConf struct {
-// 	Brokers []string
-// 	Topic   string
-// }
