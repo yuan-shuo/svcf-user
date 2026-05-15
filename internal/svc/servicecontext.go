@@ -30,6 +30,7 @@ type ServiceContext struct {
 	NoAuthLimit         rest.Middleware               // 无认证接口限流中间件
 	RefreshTokenLimit   rest.Middleware               // 刷新token接口限流中间件
 	ChangePasswordLimit rest.Middleware               // 修改密码接口限流中间件
+	CookieSetter        rest.Middleware               // Cookie 设置中间件
 }
 
 // 定义为接口方便单元测试
@@ -70,5 +71,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		NoAuthLimit:         middleware.NewNoAuthLimitMiddleware(periodLimiterMgr),
 		RefreshTokenLimit:   middleware.NewRefreshTokenLimitMiddleware(tokenLimiterMgr),
 		ChangePasswordLimit: middleware.NewChangePasswordLimitMiddleware(periodLimiterMgr),
+		CookieSetter:        middleware.NewCookieSetterMiddleware(c),
 	}
 }

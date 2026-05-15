@@ -61,8 +61,7 @@ func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.NotEmpty(t, resp.AccessToken)
-	assert.NotEmpty(t, resp.RefreshToken) // RememberMe=true 时应该有 refreshToken
+	// Token 通过 Cookie 返回，不再在响应体中
 	assert.Equal(t, int64(3600), resp.ExpiresIn)
 	mockUsersModel.AssertExpectations(t)
 }
@@ -109,8 +108,7 @@ func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.NotEmpty(t, resp.AccessToken)
-	assert.Empty(t, resp.RefreshToken) // RememberMe=false 时不应该有 refreshToken
+	// Token 通过 Cookie 返回，不再在响应体中
 	assert.Equal(t, int64(3600), resp.ExpiresIn)
 	mockUsersModel.AssertExpectations(t)
 }

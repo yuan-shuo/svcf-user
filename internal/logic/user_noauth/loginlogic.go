@@ -9,6 +9,7 @@ import (
 	"user/internal/errs"
 	"user/internal/logic/userutils"
 	"user/internal/metrics"
+	"user/internal/middleware"
 	"user/internal/svc"
 	"user/internal/types"
 
@@ -66,11 +67,17 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 		}
 	}
 
-	// 5. 构建响应
+	// 5. 设置 Cookie（通过中间件）
+	if setter := middleware.GetCookieSetter(l.ctx); setter != nil {
+		setter.AccessToken = accessToken
+		if refreshToken != "" {
+			setter.RefreshToken = refreshToken
+		}
+	}
+
+	// 6. 构建响应
 	l.svcCtx.Metrics.UserLoginsTotal.Inc(metrics.UserLoginsTotalSourceWeb, metrics.UserLoginsTotalStatusSuccess)
 	return &types.LoginResp{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    l.svcCtx.Config.Auth.AccessExpire,
+		ExpiresIn: l.svcCtx.Config.Auth.AccessExpire,
 	}, nil
 }

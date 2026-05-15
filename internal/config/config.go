@@ -29,6 +29,8 @@ type Config struct {
 
 	RateLimit RateLimit // 限流配置
 
+	Cookie CookieConfig // Cookie 配置
+
 	rest.RestConf
 }
 
@@ -98,4 +100,12 @@ type SmtpConfig struct {
 	Username string
 	Password string
 	From     string
+}
+
+// Cookie 配置
+type CookieConfig struct {
+	Domain   string // Cookie 域名
+	Secure   bool   // 仅 HTTPS 传输
+	HttpOnly bool   // 禁止 JS 读取
+	SameSite string // SameSite 策略: strict, lax, none
 }

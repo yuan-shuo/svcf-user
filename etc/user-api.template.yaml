@@ -17,6 +17,23 @@ RefreshSecret: "yourRTsecret"
 # Refresh Token 有效期，单位：秒
 RefreshExpire: 604800
 
+# Cookie 配置（用于 JWT Token 的安全传输）
+Cookie:
+  # Cookie 域名，空字符串表示使用当前域名
+  Domain: ""
+
+  # 仅 HTTPS 传输，生产环境必须设置为 true
+  Secure: false
+
+  # 禁止 JavaScript 读取 Cookie，防止 XSS 攻击，必须设置为 true
+  HttpOnly: true
+
+  # SameSite 策略，可选值: strict, lax, none
+  # strict: 最严格，完全禁止第三方网站携带 Cookie
+  # lax: 允许部分安全请求携带 Cookie（如 GET 请求）
+  # none: 允许第三方携带，但必须配合 Secure: true
+  SameSite: "strict"
+
 # postgreSQL数据库配置
 PostgreSQL:
 

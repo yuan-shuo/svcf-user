@@ -35,11 +35,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodPost,
-					Path:    "/login",
-					Handler: user_noauth.LoginHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
 					Path:    "/register",
 					Handler: user_noauth.RegisterHandler(serverCtx),
 				},
@@ -60,12 +55,40 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.RefreshTokenLimit},
+			[]rest.Middleware{serverCtx.NoAuthLimit, serverCtx.CookieSetter},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/login",
+					Handler: user_noauth.LoginHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/user/v1/noauth"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.RefreshTokenLimit, serverCtx.CookieSetter},
 			[]rest.Route{
 				{
 					Method:  http.MethodPost,
 					Path:    "/refreshtoken",
 					Handler: user_noauth.RefreshTokenHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/user/v1/noauth"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.CookieSetter},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/logout",
+					Handler: user_noauth.LogoutHandler(serverCtx),
 				},
 			}...,
 		),

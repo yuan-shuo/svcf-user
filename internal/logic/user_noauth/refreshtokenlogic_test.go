@@ -63,8 +63,7 @@ func TestRefreshTokenLogic_RefreshToken_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.NotEmpty(t, resp.AccessToken)
-	assert.NotEmpty(t, resp.RefreshToken)
+	// Token 通过 Cookie 返回，不再在响应体中
 	assert.Equal(t, int64(3600), resp.ExpiresIn)
 	mockUsersModel.AssertExpectations(t)
 }

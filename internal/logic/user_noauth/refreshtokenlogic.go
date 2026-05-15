@@ -9,6 +9,7 @@ import (
 	"user/internal/errs"
 	"user/internal/logic/userutils"
 	"user/internal/metrics"
+	"user/internal/middleware"
 	"user/internal/svc"
 	"user/internal/types"
 
@@ -63,11 +64,15 @@ func (l *RefreshTokenLogic) RefreshToken(req *types.RefreshTokenReq) (resp *type
 		return nil, err
 	}
 
+	// 设置 Cookie（通过中间件）
+	if setter := middleware.GetCookieSetter(l.ctx); setter != nil {
+		setter.AccessToken = newAccess
+		setter.RefreshToken = newRefresh
+	}
+
 	// 返回响应
 	l.svcCtx.Metrics.TokenRefreshTotal.Inc(metrics.TokenRefreshTotalStatusSuccess)
 	return &types.RefreshTokenResp{
-		AccessToken:  newAccess,
-		RefreshToken: newRefresh,
-		ExpiresIn:    l.svcCtx.Config.Auth.AccessExpire,
+		ExpiresIn: l.svcCtx.Config.Auth.AccessExpire,
 	}, nil
 }

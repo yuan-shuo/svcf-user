@@ -13,15 +13,19 @@ type ChangePasswordResp struct {
 }
 
 type LoginReq struct {
-	Email      string `json:"email"`                             // 邮箱
-	Password   string `json:"password"`                          // 密码
-	RememberMe bool   `json:"rememberMe,optional,default=false"` // 记住我，默认 false
+	Email      string `json:"email"`      // 邮箱
+	Password   string `json:"password"`   // 密码
+	RememberMe bool   `json:"rememberMe"` // 记住我
 }
 
 type LoginResp struct {
-	AccessToken  string `json:"accessToken"`            // 短期令牌，单位:秒
-	RefreshToken string `json:"refreshToken,omitempty"` // 长期令牌，单位:秒
-	ExpiresIn    int64  `json:"expiresIn"`              // AccessToken 有效期，单位:秒
+	ExpiresIn int64 `json:"expiresIn"` // AccessToken 有效期，单位:秒
+}
+
+type LogoutReq struct {
+}
+
+type LogoutResp struct {
 }
 
 type RefreshTokenReq struct {
@@ -29,9 +33,7 @@ type RefreshTokenReq struct {
 }
 
 type RefreshTokenResp struct {
-	AccessToken  string `json:"accessToken"`  // 短期令牌，单位:秒
-	RefreshToken string `json:"refreshToken"` // 长期令牌，单位:秒
-	ExpiresIn    int64  `json:"expiresIn"`    // AccessToken 有效期，单位:秒
+	ExpiresIn int64 `json:"expiresIn"` // AccessToken 有效期，单位:秒
 }
 
 type RegisterReq struct {
