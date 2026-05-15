@@ -29,7 +29,6 @@ type LogoutResp struct {
 }
 
 type RefreshTokenReq struct {
-	RefreshToken string `json:"refreshToken"` // 刷新令牌
 }
 
 type RefreshTokenResp struct {

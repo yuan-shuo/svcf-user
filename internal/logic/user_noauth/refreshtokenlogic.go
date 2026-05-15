@@ -31,8 +31,15 @@ func NewRefreshTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Refr
 }
 
 func (l *RefreshTokenLogic) RefreshToken(req *types.RefreshTokenReq) (resp *types.RefreshTokenResp, err error) {
+	// 从 context 获取 Refresh Token（由中间件从 Cookie 读取）
+	refreshToken, ok := middleware.GetRefreshTokenFromContext(l.ctx)
+	if !ok || refreshToken == "" {
+		l.svcCtx.Metrics.TokenRefreshTotal.Inc(metrics.TokenRefreshTotalStatusFailedInvalid)
+		return nil, errs.New(errs.CodeUnauthorized)
+	}
+
 	// 获取用户实例
-	user, err := userutils.GetUserByRefreshToken(l.ctx, l.svcCtx.UsersModel, req.RefreshToken, l.svcCtx.Config.RefreshSecret)
+	user, err := userutils.GetUserByRefreshToken(l.ctx, l.svcCtx.UsersModel, refreshToken, l.svcCtx.Config.RefreshSecret)
 	if err != nil {
 		// 根据错误类型判断具体失败原因
 		if codeErr, ok := errs.IsCodeError(err); ok {

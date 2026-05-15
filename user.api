@@ -6,7 +6,6 @@ syntax = "v1"
 @server (
 	group:      user
 	prefix:     api/user/v1
-	jwt:        Auth
 	middleware: ChangePasswordLimit
 )
 service user-api {
@@ -133,10 +132,8 @@ type ChangePasswordReq {
 // 修改密码响应
 type ChangePasswordResp {}
 
-// 刷新令牌请求 - 从 Cookie 读取 RefreshToken
-type RefreshTokenReq {
-	RefreshToken string `json:"refreshToken"` // 刷新令牌
-}
+// 刷新令牌请求 - 从 Cookie 读取 RefreshToken，无需请求体
+type RefreshTokenReq {}
 
 // 刷新令牌响应 - Token 通过 Cookie 返回
 type RefreshTokenResp {

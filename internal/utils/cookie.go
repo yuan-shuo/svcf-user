@@ -40,3 +40,12 @@ func ClearTokenCookie(w http.ResponseWriter, name string, config *CookieConfig) 
 		SameSite: config.SameSite,
 	})
 }
+
+// GetTokenFromRequest 从请求中读取指定名称的 Cookie 值
+func GetTokenFromRequest(r *http.Request, name string) (string, error) {
+	cookie, err := r.Cookie(name)
+	if err != nil {
+		return "", err
+	}
+	return cookie.Value, nil
+}

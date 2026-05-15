@@ -21,6 +21,9 @@ type CookieSetter struct {
 // setterKey context key
 type setterKey struct{}
 
+// RefreshTokenKey context key for storing refresh token from cookie
+type RefreshTokenKey struct{}
+
 // NewCookieSetterMiddleware 创建 Cookie 设置中间件，返回 rest.Middleware 类型
 func NewCookieSetterMiddleware(cfg config.Config) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
@@ -28,6 +31,11 @@ func NewCookieSetterMiddleware(cfg config.Config) func(http.HandlerFunc) http.Ha
 			// 创建 Setter 放入 context
 			setter := &CookieSetter{}
 			ctx := context.WithValue(r.Context(), setterKey{}, setter)
+
+			// 从 Cookie 读取 Refresh Token 并放入 context（供 refreshtoken 接口使用）
+		if refreshToken, err := utils.GetTokenFromRequest(r, "refresh_token"); err == nil && refreshToken != "" {
+			ctx = context.WithValue(ctx, RefreshTokenKey{}, refreshToken)
+		}
 
 			// 执行后续 handler
 			next(w, r.WithContext(ctx))
@@ -68,6 +76,14 @@ func GetCookieSetter(ctx context.Context) *CookieSetter {
 		return setter
 	}
 	return nil
+}
+
+// GetRefreshTokenFromContext 从 context 获取 Refresh Token（从 Cookie 读取的）
+func GetRefreshTokenFromContext(ctx context.Context) (string, bool) {
+	if token, ok := ctx.Value(RefreshTokenKey{}).(string); ok && token != "" {
+		return token, true
+	}
+	return "", false
 }
 
 // parseSameSite 解析 SameSite 字符串
