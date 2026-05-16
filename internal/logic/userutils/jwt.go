@@ -2,11 +2,12 @@ package userutils
 
 import (
 	"context"
-	"user/internal/config"
 	"user/internal/errs"
 	"user/internal/logger"
 	"user/internal/model"
 	"user/internal/utils"
+
+	"github.com/golang-jwt/jwt/v4"
 )
 
 // GetUserByAccessTokenClaims 从 accessToken claims 中获取用户实例
@@ -35,18 +36,37 @@ func GetUserByRefreshTokenClaims(ctx context.Context, usersModel model.UsersMode
 	return GetUserByUid(ctx, usersModel, uid)
 }
 
-func GetUserByRefreshToken(ctx context.Context, usersModel model.UsersModel, rtBase64 string, refreshSecret string) (*model.Users, error) {
-	rt, err := utils.ParseRefreshToken(rtBase64, refreshSecret)
+// GetUserByRefreshTokenWithKeyManager 使用 KeyManager 从 refreshToken 中获取用户实例（支持 RS256）
+func GetUserByRefreshTokenWithKeyManager(ctx context.Context, usersModel model.UsersModel, rtBase64 string, keyManager *utils.RSAKeyManager) (*model.Users, error) {
+	// 解析 JWT header 获取 kid（不验证签名）
+	token, _, err := new(jwt.Parser).ParseUnverified(rtBase64, &utils.RefreshToken{})
 	if err != nil {
-		// logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
-		// logc.Errorw(ctx, "从 refreshToken 中提取用户ID失败", logger.WErrorMsg(err.Error()))
+		logger.L(ctx, "解析 refreshToken header 失败").WErrorMsg(err.Error()).Errors()
+		return nil, errs.New(errs.CodeInvalidToken)
+	}
+
+	// 从 header 获取 kid
+	kid, ok := token.Header["kid"].(string)
+	if !ok || kid == "" {
+		logger.L(ctx, "refreshToken 中缺少 kid").Errors()
+		return nil, errs.New(errs.CodeInvalidToken)
+	}
+
+	// 根据 kid 获取公钥
+	publicKey, err := keyManager.GetPublicKeyByID(kid)
+	if err != nil {
+		logger.L(ctx, "获取公钥失败").WErrorMsg(err.Error()).Errors()
+		return nil, errs.New(errs.CodeInvalidToken)
+	}
+
+	// 使用公钥验证 token
+	rt, err := utils.ParseRefreshTokenWithRSA(rtBase64, publicKey)
+	if err != nil {
 		logger.L(ctx, "从 refreshToken 中提取用户ID失败").WErrorMsg(err.Error()).Errors()
 		return nil, errs.New(errs.CodeInvalidToken)
 	}
 	uid, err := rt.GetUID()
 	if err != nil {
-		// logx.Errorf("从 refreshToken 中提取用户ID失败, err=%v", err)
-		// logc.Errorw(ctx, "从 refreshToken 中提取用户ID失败", logger.WErrorMsg(err.Error()))
 		logger.L(ctx, "从 refreshToken 中提取用户ID失败").WErrorMsg(err.Error()).Errors()
 		return nil, errs.New(errs.CodeInvalidToken)
 	}
@@ -94,43 +114,52 @@ func GetEmailByJwtCtx(ctx context.Context) (string, error) {
 	return email, nil
 }
 
-// 签发 accessToken
-func GenerateAccessToken(ctx context.Context, c config.Config, user *model.Users) (string, error) {
-	accessToken, err := utils.GenerateAccessToken(
-		c.Auth.AccessSecret,
-		c.Auth.AccessExpire,
+// GenerateAccessTokenWithKeyManager 使用 RSAKeyManager 签发 accessToken（支持 RS256）
+func GenerateAccessTokenWithKeyManager(ctx context.Context, keyManager *utils.RSAKeyManager, user *model.Users) (string, error) {
+	privateKey := keyManager.GetCurrentPrivateKey()
+	keyID := keyManager.GetCurrentKeyID()
+
+	if privateKey == nil {
+		logger.L(ctx, "签发 accessToken 失败：私钥为空").WEmail(user.Email).Errors()
+		return "", errs.New(errs.CodeInternalError)
+	}
+
+	// 从配置获取过期时间
+	expireSeconds := keyManager.GetConfig().TokenExpireSecs
+
+	accessToken, err := utils.GenerateAccessTokenWithRSA(
+		privateKey,
+		keyID,
+		expireSeconds,
 		user.SnowflakeId,
 		user.Nickname,
 		user.Email,
 	)
 	if err != nil {
-		// logx.Errorf("签发 accessToken 失败, email=%s, err=%v", user.Email, err)
-		// logc.Errorw(
-		// 	ctx, "签发 accessToken 失败",
-		// 	logger.WErrorMsg(err.Error()),
-		// 	logger.WEmail(user.Email),
-		// )
-		logger.L(ctx, "签发 accessToken 失败").WErrorMsg(err.Error()).WEmail(user.Email).Errors()
+		logger.L(ctx, "使用 RSA 签发 accessToken 失败").WErrorMsg(err.Error()).WEmail(user.Email).Errors()
 		return "", errs.New(errs.CodeInternalError)
 	}
 	return accessToken, nil
 }
 
-// 签发 refreshToken
-func GenerateRefreshToken(ctx context.Context, c config.Config, user *model.Users) (string, error) {
-	refreshToken, err := utils.GenerateRefreshToken(
-		c.RefreshSecret,
-		c.RefreshExpire,
+// GenerateRefreshTokenWithKeyManager 使用 RSAKeyManager 签发 refreshToken（支持 RS256）
+func GenerateRefreshTokenWithKeyManager(ctx context.Context, keyManager *utils.RSAKeyManager, expireSeconds int64, user *model.Users) (string, error) {
+	privateKey := keyManager.GetCurrentPrivateKey()
+	keyID := keyManager.GetCurrentKeyID()
+
+	if privateKey == nil {
+		logger.L(ctx, "签发 refreshToken 失败：私钥为空").WEmail(user.Email).Errors()
+		return "", errs.New(errs.CodeInternalError)
+	}
+
+	refreshToken, err := utils.GenerateRefreshTokenWithRSA(
+		privateKey,
+		keyID,
+		expireSeconds,
 		user.SnowflakeId,
 	)
 	if err != nil {
-		// logx.Errorf("签发 refreshToken 失败, email=%s, err=%v", user.Email, err)
-		// logc.Errorw(
-		// 	ctx, "签发 refreshToken 失败",
-		// 	logger.WErrorMsg(err.Error()),
-		// 	logger.WEmail(user.Email),
-		// )
-		logger.L(ctx, "签发 refreshToken 失败").WErrorMsg(err.Error()).WEmail(user.Email).Errors()
+		logger.L(ctx, "使用 RSA 签发 refreshToken 失败").WErrorMsg(err.Error()).WEmail(user.Email).Errors()
 		return "", errs.New(errs.CodeInternalError)
 	}
 	return refreshToken, nil

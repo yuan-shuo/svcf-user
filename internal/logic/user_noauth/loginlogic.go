@@ -49,18 +49,18 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 		return nil, err
 	}
 
-	// 3. 签发 accessToken
-	accessToken, err := userutils.GenerateAccessToken(l.ctx, l.svcCtx.Config, user)
+	// 3. 使用 RSA 签发 accessToken（RS256）
+	accessToken, err := userutils.GenerateAccessTokenWithKeyManager(l.ctx, l.svcCtx.KeyManager, user)
 	if err != nil {
 		l.svcCtx.Metrics.UserLoginsTotal.Inc(metrics.UserLoginsTotalSourceWeb, metrics.UserLoginsTotalStatusFailedPassword)
 		return nil, err
 	}
 
-	// 4. 签发 refreshToken
+	// 4. 使用 RSA 签发 refreshToken（RS256）
 	var refreshToken string
 	if req.RememberMe {
 		// 仅在用户主动选择 "记住我" 时提供RT
-		refreshToken, err = userutils.GenerateRefreshToken(l.ctx, l.svcCtx.Config, user)
+		refreshToken, err = userutils.GenerateRefreshTokenWithKeyManager(l.ctx, l.svcCtx.KeyManager, l.svcCtx.Config.RefreshExpire, user)
 		if err != nil {
 			l.svcCtx.Metrics.UserLoginsTotal.Inc(metrics.UserLoginsTotalSourceWeb, metrics.UserLoginsTotalStatusFailedPassword)
 			return nil, err

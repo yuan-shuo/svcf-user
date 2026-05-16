@@ -6,6 +6,7 @@ package handler
 import (
 	"net/http"
 
+	jwks "user/internal/handler/jwks"
 	user "user/internal/handler/user"
 	user_noauth "user/internal/handler/user_noauth"
 	"user/internal/svc"
@@ -14,6 +15,20 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.JWKSCacheControl},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/jwks",
+					Handler: jwks.JwksHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/user/v1"),
+	)
+
 	server.AddRoutes(
 		rest.WithMiddlewares(
 			[]rest.Middleware{serverCtx.ChangePasswordLimit},

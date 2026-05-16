@@ -12,6 +12,19 @@ type ChangePasswordReq struct {
 type ChangePasswordResp struct {
 }
 
+type JWK struct {
+	Kty string `json:"kty"` // 密钥类型，如 RSA
+	Kid string `json:"kid"` // 密钥标识符
+	Use string `json:"use"` // 用途，sig 表示签名
+	N   string `json:"n"`   // RSA 模数 (base64url 编码)
+	E   string `json:"e"`   // RSA 指数 (base64url 编码)
+	Alg string `json:"alg"` // 算法，如 RS256
+}
+
+type JWKSResp struct {
+	Keys []JWK `json:"keys"` // 公钥列表
+}
+
 type LoginReq struct {
 	Email      string `json:"email"`      // 邮箱
 	Password   string `json:"password"`   // 密码

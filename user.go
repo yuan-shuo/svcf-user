@@ -32,6 +32,13 @@ func main() {
 	defer server.Stop()
 
 	ctx := svc.NewServiceContext(c)
+	defer func() {
+		// 优雅关闭：停止密钥管理器自动轮换goroutine
+		if ctx.KeyManagerStopFunc != nil {
+			ctx.KeyManagerStopFunc()
+		}
+	}()
+
 	handler.RegisterHandlers(server, ctx)
 
 	// 自定义错误

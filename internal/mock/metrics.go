@@ -2,8 +2,10 @@ package mock
 
 import (
 	"sync"
+	"time"
 
 	"user/internal/metrics"
+	"user/internal/utils"
 )
 
 // testMetrics 用于测试的全局 metrics 实例（避免重复注册）
@@ -16,4 +18,15 @@ func GetTestMetrics() *metrics.Metrics {
 		testMetrics = metrics.NewMetrics()
 	})
 	return testMetrics
+}
+
+// NewTestKeyManager 创建用于测试的 RSA KeyManager
+func NewTestKeyManager() (*utils.RSAKeyManager, error) {
+	cfg := &utils.KeyManagerConfig{
+		Bits:             2048,
+		RotationInterval: 24 * time.Hour,
+		GracePeriod:      48 * time.Hour,
+		TokenExpireSecs:  3600,
+	}
+	return utils.NewRSAKeyManagerWithConfig(cfg)
 }

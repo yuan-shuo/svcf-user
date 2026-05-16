@@ -31,7 +31,23 @@ type Config struct {
 
 	Cookie CookieConfig // Cookie 配置
 
+	JWKS JWKSConfig // JWKS 配置
+
+	KeyManager KeyManagerConfig // 密钥管理器配置
+
 	rest.RestConf
+}
+
+// JWKS 配置
+type JWKSConfig struct {
+	CacheControlMaxAge int // JWKS 缓存时间（秒），默认 3600
+}
+
+// KeyManagerConfig 密钥管理器配置
+type KeyManagerConfig struct {
+	Bits             int   // 密钥位数，默认 2048
+	RotationInterval int64 // 轮换周期（秒），默认 86400（24小时）
+	GracePeriod      int64 // 旧密钥保留期（秒），默认 172800（48小时）
 }
 
 // 限流配置
@@ -75,8 +91,9 @@ type VerifyCodeType struct {
 
 // jwt认证配置
 type Auth struct {
-	AccessSecret string // Access Token 签名密钥
-	AccessExpire int64  // Access Token 有效期
+	AccessExpire        int64  // Access Token 有效期（秒）
+	AccessPrivateKeyPEM string // Access Token 签名私钥（RS256 使用，PEM 格式，留空则自动生成）
+	KeyID               string // 密钥标识符，用于 JWKS 中的 kid（留空则自动生成）
 }
 
 // pg数据库配置

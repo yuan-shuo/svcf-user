@@ -4,18 +4,39 @@ Port: 8888
 
 # JWT 认证配置
 Auth:
-
-  # Access Token 签名密钥，用于签发和验证短期令牌
-  AccessSecret: "yourATsecret"
-
   # Access Token 有效期，单位：秒
   AccessExpire: 86400
+
+  # Access Token 签名私钥（RS256 使用，PEM 格式）
+  # 留空表示自动生成新的 RSA 密钥对
+  AccessPrivateKeyPEM: ""
+
+  # 密钥标识符，用于 JWKS 中的 kid
+  # 留空表示使用自动生成的 kid
+  KeyID: ""
 
 # Refresh Token 签名密钥，用于在 Access Token 过期后获取新的 Access Token
 RefreshSecret: "yourRTsecret"
 
 # Refresh Token 有效期，单位：秒
 RefreshExpire: 604800
+
+# JWKS 配置（用于网关缓存公钥）
+JWKS:
+  # JWKS 缓存时间（秒），告诉网关可以缓存 JWKS 多久
+  # 建议设置为密钥轮换周期的一半，例如轮换周期 24h，则缓存 12h
+  # 默认 3600 秒（1 小时）
+  CacheControlMaxAge: 3600
+
+# 密钥管理器配置（用于 RSA 密钥轮换）
+KeyManager:
+  # 密钥位数，默认 2048
+  Bits: 2048
+  # 轮换周期（秒），默认 86400（24小时）
+  RotationInterval: 86400
+  # 旧密钥保留期（秒），默认 172800（48小时）
+  # 必须 >= AccessExpire，确保旧密钥能验证已签发的 token
+  GracePeriod: 172800
 
 # Cookie 配置（用于 JWT Token 的安全传输）
 Cookie:

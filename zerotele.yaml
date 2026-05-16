@@ -58,6 +58,23 @@ logfields:
     type: string
     comment: 消息队列错误信息
 
+  # 密钥轮换相关字段
+  - name: old_key_id
+    type: string
+    comment: 旧密钥ID（密钥轮换时使用）
+
+  - name: new_key_id
+    type: string
+    comment: 新密钥ID（密钥轮换时使用）
+
+  - name: rotation_interval
+    type: string
+    comment: 密钥轮换周期
+
+  - name: grace_period
+    type: string
+    comment: 旧密钥保留期
+
 # 指标清单
 metrics:
   # ==================== 用户注册指标 ====================

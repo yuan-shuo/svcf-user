@@ -37,17 +37,20 @@ func TestLoginLogic_Login_Success_WithRememberMe(t *testing.T) {
 	// 设置 mock 期望
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(user, nil)
 
+	// 创建 RSA KeyManager
+	keyManager, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
 		Config: config.Config{
 			Auth: config.Auth{
-				AccessSecret: "test-access-secret",
 				AccessExpire: 3600,
 			},
-			RefreshSecret: "test-refresh-secret",
 			RefreshExpire: 7200,
 		},
-		Metrics: mock.GetTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
+		KeyManager: keyManager,
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)
@@ -85,16 +88,20 @@ func TestLoginLogic_Login_Success_WithoutRememberMe(t *testing.T) {
 	// 设置 mock 期望
 	mockUsersModel.On("FindOneByEmail", ctx, email).Return(user, nil)
 
+	// 创建 RSA KeyManager
+	keyManager, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
 		Config: config.Config{
 			Auth: config.Auth{
-				AccessSecret: "test-access-secret",
 				AccessExpire: 3600,
 			},
-			// 不需要 RefreshSecret 和 RefreshExpire，因为不签发 RT
+			// 不需要 RefreshExpire，因为不签发 RT
 		},
-		Metrics: mock.GetTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
+		KeyManager: keyManager,
 	}
 
 	logic := NewLoginLogic(ctx, svcCtx)

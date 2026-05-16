@@ -70,6 +70,18 @@ service user-api {
 	post /logout (LogoutReq) returns (LogoutResp)
 }
 
+// JWKS 端点 - 供网关获取公钥验证 JWT 签名
+@server (
+	group:      jwks
+	prefix:     api/user/v1
+	middleware: JWKSCacheControl
+)
+service user-api {
+	// 获取 JWKS（JSON Web Key Set）
+	@handler jwks
+	get /jwks returns (JWKSResp)
+}
+
 // 发送验证码请求
 type SendVerifyCodeReq {
 	Email string `json:"email"` // 邮箱地址
@@ -145,4 +157,19 @@ type LogoutReq {}
 
 // 登出响应
 type LogoutResp {}
+
+// JWK（JSON Web Key）结构
+type JWK {
+	Kty string `json:"kty"` // 密钥类型，如 RSA
+	Kid string `json:"kid"` // 密钥标识符
+	Use string `json:"use"` // 用途，sig 表示签名
+	N   string `json:"n"` // RSA 模数 (base64url 编码)
+	E   string `json:"e"` // RSA 指数 (base64url 编码)
+	Alg string `json:"alg"` // 算法，如 RS256
+}
+
+// JWKS 响应
+type JWKSResp {
+	Keys []JWK `json:"keys"` // 公钥列表
+}
 

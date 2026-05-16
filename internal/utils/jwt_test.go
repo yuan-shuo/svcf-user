@@ -7,420 +7,681 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// ==================== JwtClaims 测试 ====================
+// ==================== RS256 Token 生成测试 ====================
 
-func TestJwtClaims_Valid_Success(t *testing.T) {
-	claims := JwtClaims{
-		Uid:       json.Number("12345"),
-		TokenType: accessTokenType,
-		Iat:       time.Now().Unix(),
-		Exp:       time.Now().Add(time.Hour).Unix(),
-	}
+func TestGenerateAccessTokenWithRSA(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
 
-	err := claims.Valid()
-
-	assert.NoError(t, err)
-}
-
-func TestJwtClaims_Valid_MissingUid(t *testing.T) {
-	claims := JwtClaims{
-		Uid:       "",
-		TokenType: accessTokenType,
-		Iat:       time.Now().Unix(),
-		Exp:       time.Now().Add(time.Hour).Unix(),
-	}
-
-	err := claims.Valid()
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "uid is required")
-}
-
-func TestJwtClaims_Valid_InvalidUidFormat(t *testing.T) {
-	claims := JwtClaims{
-		Uid:       json.Number("not-a-number"),
-		TokenType: accessTokenType,
-		Iat:       time.Now().Unix(),
-		Exp:       time.Now().Add(time.Hour).Unix(),
-	}
-
-	err := claims.Valid()
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid uid format")
-}
-
-func TestJwtClaims_Valid_MissingTokenType(t *testing.T) {
-	claims := JwtClaims{
-		Uid:       json.Number("12345"),
-		TokenType: "",
-		Iat:       time.Now().Unix(),
-		Exp:       time.Now().Add(time.Hour).Unix(),
-	}
-
-	err := claims.Valid()
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "token type is required")
-}
-
-// TestJwtClaims_Valid_Expired 已移除，因为 iat/exp 校验由 go-zero 中间件处理
-// func TestJwtClaims_Valid_Expired(t *testing.T) {
-// 	claims := JwtClaims{
-// 		Uid:       json.Number("12345"),
-// 		TokenType: accessTokenType,
-// 		Iat:       time.Now().Add(-2 * time.Hour).Unix(),
-// 		Exp:       time.Now().Add(-time.Hour).Unix(),
-// 	}
-//
-// 	err := claims.Valid()
-//
-// 	assert.Error(t, err)
-// 	assert.Contains(t, err.Error(), "expired")
-// }
-
-func TestJwtClaims_GetUID_Success(t *testing.T) {
-	claims := JwtClaims{
-		Uid: json.Number("12345"),
-	}
-
-	uid, err := claims.GetUID()
-
-	assert.NoError(t, err)
-	assert.Equal(t, int64(12345), uid)
-}
-
-// ==================== AccessToken 测试 ====================
-
-func TestAccessToken_Valid_Success(t *testing.T) {
-	claims := AccessToken{
-		Nickname: "testuser",
-		Email:    "test@example.com",
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			TokenType: accessTokenType,
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-
-	err := claims.Valid()
-
-	assert.NoError(t, err)
-}
-
-func TestAccessToken_Valid_MissingEmail(t *testing.T) {
-	claims := AccessToken{
-		Nickname: "testuser",
-		Email:    "",
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			TokenType: accessTokenType,
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-
-	err := claims.Valid()
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "email is required")
-}
-
-// ==================== RefreshToken 测试 ====================
-
-func TestRefreshToken_Valid_Success(t *testing.T) {
-	claims := RefreshToken{
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			TokenType: refreshTokenType,
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-
-	err := claims.Valid()
-
-	assert.NoError(t, err)
-}
-
-func TestRefreshToken_Valid_WrongTokenType(t *testing.T) {
-	claims := RefreshToken{
-		JwtClaims: JwtClaims{
-			Uid:       json.Number("12345"),
-			TokenType: accessTokenType, // 错误的类型
-			Iat:       time.Now().Unix(),
-			Exp:       time.Now().Add(time.Hour).Unix(),
-		},
-	}
-
-	err := claims.Valid()
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid token type")
-}
-
-// ==================== GenerateAccessToken 测试 ====================
-
-func TestGenerateAccessToken_Success(t *testing.T) {
-	secret := "test-secret"
 	expireSeconds := int64(3600)
-	uid := int64(12345)
-	nickname := "testuser"
+	uid := int64(123456789)
+	nickname := "TestUser"
 	email := "test@example.com"
 
-	token, err := GenerateAccessToken(secret, expireSeconds, uid, nickname, email)
-
-	assert.NoError(t, err)
+	token, err := GenerateAccessTokenWithRSA(keyPair.PrivateKey, keyPair.KeyID, expireSeconds, uid, nickname, email)
+	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
-	// 解析验证
-	parsed, err := ParseAccessToken(token, secret)
-	assert.NoError(t, err)
-	assert.Equal(t, nickname, parsed.Nickname)
-	assert.Equal(t, email, parsed.Email)
-	parsedUid, _ := parsed.GetUID()
-	assert.Equal(t, uid, parsedUid)
+	// 使用公钥解析验证
+	claims, err := ParseAccessTokenWithRSA(token, keyPair.PublicKey)
+	require.NoError(t, err)
+	gotUID, err := claims.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, uid, gotUID)
+	assert.Equal(t, nickname, claims.Nickname)
+	assert.Equal(t, email, claims.Email)
+	assert.Equal(t, accessTokenType, claims.TokenType)
 }
 
-func TestGenerateAccessToken_DifferentSecrets(t *testing.T) {
-	secret1 := "secret-1"
-	secret2 := "secret-2"
+func TestGenerateRefreshTokenWithRSA(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
 
-	token1, _ := GenerateAccessToken(secret1, 3600, 12345, "user1", "user1@test.com")
-	token2, _ := GenerateAccessToken(secret2, 3600, 12345, "user1", "user1@test.com")
+	expireSeconds := int64(604800)
+	uid := int64(123456789)
 
-	// 相同内容不同密钥应该生成不同token
-	assert.NotEqual(t, token1, token2)
-}
-
-// ==================== GenerateRefreshToken 测试 ====================
-
-func TestGenerateRefreshToken_Success(t *testing.T) {
-	secret := "test-secret"
-	expireSeconds := int64(3600)
-	uid := int64(12345)
-
-	token, err := GenerateRefreshToken(secret, expireSeconds, uid)
-
-	assert.NoError(t, err)
+	token, err := GenerateRefreshTokenWithRSA(keyPair.PrivateKey, keyPair.KeyID, expireSeconds, uid)
+	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
-	// 解析验证
-	parsed, err := ParseRefreshToken(token, secret)
-	assert.NoError(t, err)
-	parsedUid, _ := parsed.GetUID()
-	assert.Equal(t, uid, parsedUid)
-	assert.Equal(t, refreshTokenType, parsed.TokenType)
+	// 使用公钥解析验证
+	claims, err := ParseRefreshTokenWithRSA(token, keyPair.PublicKey)
+	require.NoError(t, err)
+	gotUID, err := claims.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, uid, gotUID)
+	assert.Equal(t, refreshTokenType, claims.TokenType)
 }
 
-// ==================== ParseAccessToken 测试 ====================
+// ==================== RS256 Token 解析测试 ====================
 
-func TestParseAccessToken_Success(t *testing.T) {
-	secret := "test-secret"
-	token, _ := GenerateAccessToken(secret, 3600, 12345, "testuser", "test@example.com")
+func TestParseAccessTokenWithRSA_Invalid(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
 
-	parsed, err := ParseAccessToken(token, secret)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, parsed)
-	assert.Equal(t, "testuser", parsed.Nickname)
-	assert.Equal(t, "test@example.com", parsed.Email)
-	uid, _ := parsed.GetUID()
-	assert.Equal(t, int64(12345), uid)
-}
-
-func TestParseAccessToken_InvalidSecret(t *testing.T) {
-	secret := "test-secret"
-	wrongSecret := "wrong-secret"
-	token, _ := GenerateAccessToken(secret, 3600, 12345, "testuser", "test@example.com")
-
-	parsed, err := ParseAccessToken(token, wrongSecret)
-
+	// 测试无效 token
+	_, err = ParseAccessTokenWithRSA("invalid.token.here", keyPair.PublicKey)
 	assert.Error(t, err)
-	assert.Nil(t, parsed)
-}
 
-func TestParseAccessToken_Expired(t *testing.T) {
-	secret := "test-secret"
-	// 生成已过期的token
-	token, _ := GenerateAccessToken(secret, -1, 12345, "testuser", "test@example.com")
-
-	parsed, err := ParseAccessToken(token, secret)
-
+	// 测试过期 token
+	token, _ := GenerateAccessTokenWithRSA(keyPair.PrivateKey, keyPair.KeyID, -1, 123, "test", "test@example.com")
+	_, err = ParseAccessTokenWithRSA(token, keyPair.PublicKey)
 	assert.Error(t, err)
-	assert.Nil(t, parsed)
 }
 
-func TestParseAccessToken_InvalidFormat(t *testing.T) {
-	secret := "test-secret"
+func TestParseRefreshTokenWithRSA_Invalid(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
 
-	parsed, err := ParseAccessToken("invalid-token", secret)
-
+	// 测试无效 token
+	_, err = ParseRefreshTokenWithRSA("invalid.token.here", keyPair.PublicKey)
 	assert.Error(t, err)
-	assert.Nil(t, parsed)
-}
 
-// ==================== ParseRefreshToken 测试 ====================
-
-func TestParseRefreshToken_Success(t *testing.T) {
-	secret := "test-secret"
-	token, _ := GenerateRefreshToken(secret, 3600, 12345)
-
-	parsed, err := ParseRefreshToken(token, secret)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, parsed)
-	uid, _ := parsed.GetUID()
-	assert.Equal(t, int64(12345), uid)
-	assert.Equal(t, refreshTokenType, parsed.TokenType)
-}
-
-func TestParseRefreshToken_InvalidSecret(t *testing.T) {
-	secret := "test-secret"
-	wrongSecret := "wrong-secret"
-	token, _ := GenerateRefreshToken(secret, 3600, 12345)
-
-	parsed, err := ParseRefreshToken(token, wrongSecret)
-
+	// 测试过期 token
+	token, _ := GenerateRefreshTokenWithRSA(keyPair.PrivateKey, keyPair.KeyID, -1, 123)
+	_, err = ParseRefreshTokenWithRSA(token, keyPair.PublicKey)
 	assert.Error(t, err)
-	assert.Nil(t, parsed)
 }
 
-func TestParseRefreshToken_WrongTokenType(t *testing.T) {
-	// 使用 access token 尝试解析为 refresh token
-	secret := "test-secret"
-	accessToken, _ := GenerateAccessToken(secret, 3600, 12345, "testuser", "test@example.com")
+func TestParseAccessTokenWithRSA_WrongKey(t *testing.T) {
+	keyPair1, _ := GenerateRSAKeyPair(2048)
+	keyPair2, _ := GenerateRSAKeyPair(2048)
 
-	parsed, err := ParseRefreshToken(accessToken, secret)
+	token, _ := GenerateAccessTokenWithRSA(keyPair1.PrivateKey, keyPair1.KeyID, 3600, 123, "test", "test@example.com")
 
+	// 使用错误的公钥验证
+	_, err := ParseAccessTokenWithRSA(token, keyPair2.PublicKey)
 	assert.Error(t, err)
-	assert.Nil(t, parsed)
 }
 
-// ==================== Context 操作测试 ====================
-// 注意：这些测试模拟 go-zero JWT 中间件将 claims 字段存入 context 的行为
+func TestParseAccessTokenUnverified(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
 
-func TestUIDFromAccessToken_Success(t *testing.T) {
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
-	ctx = context.WithValue(ctx, "type", accessTokenType)
-	ctx = context.WithValue(ctx, "nickname", "testuser")
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+	token, _ := GenerateAccessTokenWithRSA(keyPair.PrivateKey, keyPair.KeyID, 3600, 123, "test", "test@example.com")
 
-	uid, err := UIDFromAccessToken(ctx)
+	// 不验证签名解析
+	claims, err := ParseAccessTokenUnverified(token)
+	require.NoError(t, err)
+	gotUID, err := claims.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, int64(123), gotUID)
+	assert.Equal(t, "test", claims.Nickname)
+	assert.Equal(t, "test@example.com", claims.Email)
+}
 
-	assert.NoError(t, err)
-	assert.Equal(t, int64(12345), uid)
+func TestParseRefreshTokenUnverified(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	token, _ := GenerateRefreshTokenWithRSA(keyPair.PrivateKey, keyPair.KeyID, 604800, 123)
+
+	// 不验证签名解析
+	claims, err := ParseRefreshTokenUnverified(token)
+	require.NoError(t, err)
+	gotUID, err := claims.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, int64(123), gotUID)
+	assert.Equal(t, refreshTokenType, claims.TokenType)
+}
+
+func TestParseAccessTokenUnverified_Invalid(t *testing.T) {
+	_, err := ParseAccessTokenUnverified("invalid.token")
+	assert.Error(t, err)
+}
+
+func TestParseRefreshTokenUnverified_Invalid(t *testing.T) {
+	_, err := ParseRefreshTokenUnverified("invalid.token")
+	assert.Error(t, err)
+}
+
+// ==================== JWK/JWKS 测试 ====================
+
+func TestRSAKeyPair_ToJWK(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	jwk := keyPair.ToJWK()
+	assert.Equal(t, "RSA", jwk.Kty)
+	assert.Equal(t, keyPair.KeyID, jwk.Kid)
+	assert.Equal(t, "sig", jwk.Use)
+	assert.Equal(t, "RS256", jwk.Alg)
+	assert.NotEmpty(t, jwk.N)
+	assert.NotEmpty(t, jwk.E)
+}
+
+func TestRSAKeyPair_ToJWKS(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	jwks := keyPair.ToJWKS()
+	assert.Len(t, jwks.Keys, 1)
+	assert.Equal(t, keyPair.KeyID, jwks.Keys[0].Kid)
+}
+
+func TestJWKS_ToJSON(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	jwks := keyPair.ToJWKS()
+	jsonStr, err := jwks.ToJSON()
+	require.NoError(t, err)
+	assert.Contains(t, jsonStr, "keys")
+	assert.Contains(t, jsonStr, keyPair.KeyID)
+	assert.Contains(t, jsonStr, "RSA")
+}
+
+func TestRSAKeyPair_ToJWKSJSON(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	jsonStr, err := keyPair.ToJWKSJSON()
+	require.NoError(t, err)
+	assert.Contains(t, jsonStr, "keys")
+	assert.Contains(t, jsonStr, keyPair.KeyID)
+}
+
+func TestInitJWKSFromPEM(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	pemStr, err := PublicKeyToPEM(keyPair.PublicKey)
+	require.NoError(t, err)
+
+	jwks, err := InitJWKSFromPEM(pemStr, keyPair.KeyID)
+	require.NoError(t, err)
+	assert.Len(t, jwks.Keys, 1)
+	assert.Equal(t, keyPair.KeyID, jwks.Keys[0].Kid)
+}
+
+func TestInitJWKSFromPEM_Empty(t *testing.T) {
+	jwks, err := InitJWKSFromPEM("", "test-key")
+	require.NoError(t, err)
+	assert.Len(t, jwks.Keys, 0)
+}
+
+func TestInitJWKSFromPEM_Invalid(t *testing.T) {
+	_, err := InitJWKSFromPEM("invalid pem", "test-key")
+	assert.Error(t, err)
+}
+
+// ==================== RSA 密钥对测试 ====================
+
+func TestGenerateRSAKeyPair(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+	assert.NotNil(t, keyPair.PrivateKey)
+	assert.NotNil(t, keyPair.PublicKey)
+	assert.NotEmpty(t, keyPair.KeyID)
+	assert.Contains(t, keyPair.KeyID, "key-")
+}
+
+func TestPrivateKeyToPEM(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	pemStr := PrivateKeyToPEM(keyPair.PrivateKey)
+	assert.Contains(t, pemStr, "BEGIN RSA PRIVATE KEY")
+	assert.Contains(t, pemStr, "END RSA PRIVATE KEY")
+
+	// 验证可以解析回来
+	parsedKey, err := ParseRSAPrivateKeyFromPEM(pemStr)
+	require.NoError(t, err)
+	assert.NotNil(t, parsedKey)
+}
+
+func TestPublicKeyToPEM(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	pemStr, err := PublicKeyToPEM(keyPair.PublicKey)
+	require.NoError(t, err)
+	assert.Contains(t, pemStr, "BEGIN PUBLIC KEY")
+	assert.Contains(t, pemStr, "END PUBLIC KEY")
+
+	// 验证可以解析回来
+	parsedKey, err := ParseRSAPublicKeyFromPEM(pemStr)
+	require.NoError(t, err)
+	assert.NotNil(t, parsedKey)
+}
+
+func TestParseRSAPrivateKeyFromPEM_Invalid(t *testing.T) {
+	// 测试无效 PEM
+	_, err := ParseRSAPrivateKeyFromPEM("invalid pem")
+	assert.Error(t, err)
+
+	// 测试空字符串
+	_, err = ParseRSAPrivateKeyFromPEM("")
+	assert.Error(t, err)
+}
+
+func TestParseRSAPublicKeyFromPEM_Invalid(t *testing.T) {
+	// 测试无效 PEM
+	_, err := ParseRSAPublicKeyFromPEM("invalid pem")
+	assert.Error(t, err)
+
+	// 测试空字符串
+	_, err = ParseRSAPublicKeyFromPEM("")
+	assert.Error(t, err)
+}
+
+// ==================== Context 测试 ====================
+
+func TestUIDFromAccessToken(t *testing.T) {
+	uid := int64(123456789)
+	claims := &JwtClaims{
+		Uid:       json.Number("123456789"),
+		TokenType: accessTokenType,
+	}
+	ctx := context.WithValue(context.Background(), uidFieldName, claims.Uid)
+	ctx = context.WithValue(ctx, tokenTypeFieldName, claims.TokenType)
+	ctx = context.WithValue(ctx, nicknameFieldName, "TestUser")
+	ctx = context.WithValue(ctx, emailFieldName, "test@example.com")
+
+	result, err := UIDFromAccessToken(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, uid, result)
 }
 
 func TestUIDFromAccessToken_NotFound(t *testing.T) {
 	ctx := context.Background()
-
-	uid, err := UIDFromAccessToken(ctx)
-
+	_, err := UIDFromAccessToken(ctx)
 	assert.Error(t, err)
-	assert.Equal(t, int64(0), uid)
-	assert.Contains(t, err.Error(), "not found")
 }
 
-func TestUIDFromAccessToken_WrongType(t *testing.T) {
-	ctx := context.WithValue(context.Background(), "uid", "not-a-number")
+func TestUIDFromRefreshToken(t *testing.T) {
+	uid := int64(123456789)
+	claims := &JwtClaims{
+		Uid:       json.Number("123456789"),
+		TokenType: refreshTokenType,
+	}
+	ctx := context.WithValue(context.Background(), uidFieldName, claims.Uid)
+	ctx = context.WithValue(ctx, tokenTypeFieldName, claims.TokenType)
 
-	uid, err := UIDFromAccessToken(ctx)
-
-	assert.Error(t, err)
-	assert.Equal(t, int64(0), uid)
-}
-
-func TestUIDFromRefreshToken_Success(t *testing.T) {
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
-	ctx = context.WithValue(ctx, "type", refreshTokenType)
-
-	uid, err := UIDFromRefreshToken(ctx)
-
-	assert.NoError(t, err)
-	assert.Equal(t, int64(12345), uid)
+	result, err := UIDFromRefreshToken(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, uid, result)
 }
 
 func TestUIDFromRefreshToken_NotFound(t *testing.T) {
 	ctx := context.Background()
-
-	uid, err := UIDFromRefreshToken(ctx)
-
+	_, err := UIDFromRefreshToken(ctx)
 	assert.Error(t, err)
-	assert.Equal(t, int64(0), uid)
 }
 
-func TestAccessTokenFromContext_Success(t *testing.T) {
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
-	ctx = context.WithValue(ctx, "type", accessTokenType)
-	ctx = context.WithValue(ctx, "nickname", "testuser")
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+func TestGetJWTClaimsByContext(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, json.Number("123456789"))
+	ctx = context.WithValue(ctx, tokenTypeFieldName, accessTokenType)
 
-	parsed, err := AccessTokenFromContext(ctx)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, parsed)
-	assert.Equal(t, "testuser", parsed.Nickname)
-	assert.Equal(t, "test@example.com", parsed.Email)
-	uid, _ := parsed.GetUID()
-	assert.Equal(t, int64(12345), uid)
+	claims, err := GetJWTClaimsByContext(ctx)
+	require.NoError(t, err)
+	gotUID, err := claims.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, int64(123456789), gotUID)
+	assert.Equal(t, accessTokenType, claims.TokenType)
 }
 
-func TestAccessTokenFromContext_NotFound(t *testing.T) {
+func TestGetJWTClaimsByContext_NotFound(t *testing.T) {
 	ctx := context.Background()
-
-	parsed, err := AccessTokenFromContext(ctx)
-
+	_, err := GetJWTClaimsByContext(ctx)
 	assert.Error(t, err)
-	assert.Nil(t, parsed)
 }
 
-func TestRefreshTokenFromContext_Success(t *testing.T) {
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
-	ctx = context.WithValue(ctx, "type", refreshTokenType)
+func TestAccessTokenFromContext(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, json.Number("123456789"))
+	ctx = context.WithValue(ctx, tokenTypeFieldName, accessTokenType)
+	ctx = context.WithValue(ctx, nicknameFieldName, "TestUser")
+	ctx = context.WithValue(ctx, emailFieldName, "test@example.com")
 
-	parsed, err := RefreshTokenFromContext(ctx)
+	at, err := AccessTokenFromContext(ctx)
+	require.NoError(t, err)
+	gotUID, err := at.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, int64(123456789), gotUID)
+	assert.Equal(t, "TestUser", at.Nickname)
+	assert.Equal(t, "test@example.com", at.Email)
+}
 
-	assert.NoError(t, err)
-	assert.NotNil(t, parsed)
-	uid, _ := parsed.GetUID()
-	assert.Equal(t, int64(12345), uid)
+func TestAccessTokenFromContext_MissingFields(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, json.Number("123456789"))
+	ctx = context.WithValue(ctx, tokenTypeFieldName, accessTokenType)
+	// 缺少 nickname 和 email
+
+	_, err := AccessTokenFromContext(ctx)
+	assert.Error(t, err)
+}
+
+func TestRefreshTokenFromContext(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, json.Number("123456789"))
+	ctx = context.WithValue(ctx, tokenTypeFieldName, refreshTokenType)
+
+	rt, err := RefreshTokenFromContext(ctx)
+	require.NoError(t, err)
+	gotUID, err := rt.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, int64(123456789), gotUID)
+	assert.Equal(t, refreshTokenType, rt.TokenType)
 }
 
 func TestRefreshTokenFromContext_NotFound(t *testing.T) {
 	ctx := context.Background()
-
-	parsed, err := RefreshTokenFromContext(ctx)
-
+	_, err := RefreshTokenFromContext(ctx)
 	assert.Error(t, err)
-	assert.Nil(t, parsed)
 }
 
-func TestGetEmailByAccessToken_Success(t *testing.T) {
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "uid", json.Number("12345"))
-	ctx = context.WithValue(ctx, "type", accessTokenType)
-	ctx = context.WithValue(ctx, "nickname", "testuser")
-	ctx = context.WithValue(ctx, "email", "test@example.com")
+func TestGetEmailByAccessToken(t *testing.T) {
+	ctx := context.WithValue(context.Background(), uidFieldName, json.Number("123456789"))
+	ctx = context.WithValue(ctx, tokenTypeFieldName, accessTokenType)
+	ctx = context.WithValue(ctx, nicknameFieldName, "TestUser")
+	ctx = context.WithValue(ctx, emailFieldName, "test@example.com")
 
 	email, err := GetEmailByAccessToken(ctx)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "test@example.com", email)
 }
 
 func TestGetEmailByAccessToken_NotFound(t *testing.T) {
 	ctx := context.Background()
-
-	email, err := GetEmailByAccessToken(ctx)
-
+	_, err := GetEmailByAccessToken(ctx)
 	assert.Error(t, err)
-	assert.Empty(t, email)
+}
+
+// ==================== Claims 验证测试 ====================
+
+func TestJwtClaims_Valid(t *testing.T) {
+	tests := []struct {
+		name    string
+		claims  JwtClaims
+		wantErr bool
+	}{
+		{
+			name: "valid claims",
+			claims: JwtClaims{
+				Uid:       json.Number("123456789"),
+				TokenType: accessTokenType,
+				Exp:       time.Now().Add(time.Hour).Unix(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing uid",
+			claims: JwtClaims{
+				TokenType: accessTokenType,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid uid format",
+			claims: JwtClaims{
+				Uid:       json.Number("not-a-number"),
+				TokenType: accessTokenType,
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing token type",
+			claims: JwtClaims{
+				Uid: json.Number("123456789"),
+			},
+			wantErr: true,
+		},
+		{
+			name: "expired token",
+			claims: JwtClaims{
+				Uid:       json.Number("123456789"),
+				TokenType: accessTokenType,
+				Exp:       time.Now().Add(-time.Hour).Unix(),
+			},
+			wantErr: true,
+		},
+		{
+			name: "no expiration",
+			claims: JwtClaims{
+				Uid:       json.Number("123456789"),
+				TokenType: accessTokenType,
+				Exp:       0,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.claims.Valid()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestJwtClaims_GetUID(t *testing.T) {
+	claims := JwtClaims{Uid: json.Number("123456789")}
+	uid, err := claims.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, int64(123456789), uid)
+}
+
+func TestJwtClaims_GetUID_Invalid(t *testing.T) {
+	claims := JwtClaims{Uid: json.Number("not-a-number")}
+	_, err := claims.GetUID()
+	assert.Error(t, err)
+}
+
+func TestAccessToken_Valid(t *testing.T) {
+	tests := []struct {
+		name    string
+		claims  AccessToken
+		wantErr bool
+	}{
+		{
+			name: "valid access token",
+			claims: AccessToken{
+				Nickname: "TestUser",
+				Email:    "test@example.com",
+				JwtClaims: JwtClaims{
+					Uid:       json.Number("123456789"),
+					TokenType: accessTokenType,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing email",
+			claims: AccessToken{
+				Nickname: "TestUser",
+				JwtClaims: JwtClaims{
+					Uid:       json.Number("123456789"),
+					TokenType: accessTokenType,
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.claims.Valid()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestRefreshToken_Valid(t *testing.T) {
+	tests := []struct {
+		name    string
+		claims  RefreshToken
+		wantErr bool
+	}{
+		{
+			name: "valid refresh token",
+			claims: RefreshToken{
+				JwtClaims: JwtClaims{
+					Uid:       json.Number("123456789"),
+					TokenType: refreshTokenType,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "wrong token type",
+			claims: RefreshToken{
+				JwtClaims: JwtClaims{
+					Uid:       json.Number("123456789"),
+					TokenType: accessTokenType,
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.claims.Valid()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// ==================== 边界测试 ====================
+
+func TestGenerateAccessTokenWithRSA_NoKeyID(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	token, err := GenerateAccessTokenWithRSA(keyPair.PrivateKey, "", 3600, 123, "test", "test@example.com")
+	require.NoError(t, err)
+
+	// 解析 token 检查 header
+	claims, err := ParseAccessTokenWithRSA(token, keyPair.PublicKey)
+	require.NoError(t, err)
+	gotUID, err := claims.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, int64(123), gotUID)
+}
+
+func TestGenerateRefreshTokenWithRSA_NoKeyID(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	token, err := GenerateRefreshTokenWithRSA(keyPair.PrivateKey, "", 3600, 123)
+	require.NoError(t, err)
+
+	// 解析 token 检查
+	claims, err := ParseRefreshTokenWithRSA(token, keyPair.PublicKey)
+	require.NoError(t, err)
+	gotUID, err := claims.GetUID()
+	require.NoError(t, err)
+	assert.Equal(t, int64(123), gotUID)
+}
+
+func TestGenerateRSAKeyPair_DifferentKeys(t *testing.T) {
+	keyPair1, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	keyPair2, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	// 验证生成的密钥对不同
+	assert.NotEqual(t, keyPair1.KeyID, keyPair2.KeyID)
+	assert.NotEqual(t, keyPair1.PrivateKey.D, keyPair2.PrivateKey.D)
+}
+
+func TestPrivateKeyToPEM_RoundTrip(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	pemStr := PrivateKeyToPEM(keyPair.PrivateKey)
+	parsedKey, err := ParseRSAPrivateKeyFromPEM(pemStr)
+	require.NoError(t, err)
+
+	// 验证解析后的密钥与原密钥相同
+	assert.Equal(t, keyPair.PrivateKey.D, parsedKey.D)
+	assert.Equal(t, keyPair.PrivateKey.N, parsedKey.N)
+}
+
+func TestPublicKeyToPEM_RoundTrip(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	pemStr, err := PublicKeyToPEM(keyPair.PublicKey)
+	require.NoError(t, err)
+
+	parsedKey, err := ParseRSAPublicKeyFromPEM(pemStr)
+	require.NoError(t, err)
+
+	// 验证解析后的公钥与原公钥相同
+	assert.Equal(t, keyPair.PublicKey.N, parsedKey.N)
+	assert.Equal(t, keyPair.PublicKey.E, parsedKey.E)
+}
+
+func TestRSAKeyPair_ToJWK_Consistency(t *testing.T) {
+	keyPair, err := GenerateRSAKeyPair(2048)
+	require.NoError(t, err)
+
+	jwk1 := keyPair.ToJWK()
+	jwk2 := keyPair.ToJWK()
+
+	// 同一密钥对生成的 JWK 应该相同
+	assert.Equal(t, jwk1.Kid, jwk2.Kid)
+	assert.Equal(t, jwk1.N, jwk2.N)
+	assert.Equal(t, jwk1.E, jwk2.E)
+}
+
+func TestJWKS_ToJSON_Empty(t *testing.T) {
+	jwks := JWKS{Keys: []JWK{}}
+	jsonStr, err := jwks.ToJSON()
+	require.NoError(t, err)
+	assert.Contains(t, jsonStr, "keys")
+	assert.Contains(t, jsonStr, "[]")
+}
+
+// BenchmarkGenerateRSAKeyPair 基准测试
+func BenchmarkGenerateRSAKeyPair(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_, err := GenerateRSAKeyPair(2048)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkGenerateAccessTokenWithRSA 基准测试
+func BenchmarkGenerateAccessTokenWithRSA(b *testing.B) {
+	keyPair, _ := GenerateRSAKeyPair(2048)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := GenerateAccessTokenWithRSA(keyPair.PrivateKey, keyPair.KeyID, 3600, 123, "test", "test@example.com")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkParseAccessTokenWithRSA 基准测试
+func BenchmarkParseAccessTokenWithRSA(b *testing.B) {
+	keyPair, _ := GenerateRSAKeyPair(2048)
+	token, _ := GenerateAccessTokenWithRSA(keyPair.PrivateKey, keyPair.KeyID, 3600, 123, "test", "test@example.com")
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := ParseAccessTokenWithRSA(token, keyPair.PublicKey)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }

@@ -6,6 +6,7 @@ package svc
 import (
 	"context"
 	"fmt"
+	"time"
 	"user/internal/config"
 	"user/internal/db"
 	"user/internal/metrics"
@@ -31,6 +32,9 @@ type ServiceContext struct {
 	RefreshTokenLimit   rest.Middleware               // 刷新token接口限流中间件
 	ChangePasswordLimit rest.Middleware               // 修改密码接口限流中间件
 	CookieSetter        rest.Middleware               // Cookie 设置中间件
+	JWKSCacheControl    rest.Middleware               // JWKS 端点 Cache-Control 中间件
+	KeyManager          *utils.RSAKeyManager          // RSA 密钥管理器（支持密钥轮换）
+	KeyManagerStopFunc  func()                        // 密钥管理器自动轮换停止函数（用于优雅关闭）
 }
 
 // 定义为接口方便单元测试
@@ -52,6 +56,34 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	periodLimiterMgr := limiter.NewPeriodLimiterManager(c, rateLimiterRedis) // 周期限流器管理器
 	tokenLimiterMgr := limiter.NewTokenLimiterManager(c, rateLimiterRedis)   // 令牌桶限流器管理器
 
+	// 初始化 RSA 密钥管理器
+	// 从配置文件读取配置
+	keyManagerCfg := &utils.KeyManagerConfig{
+		Bits:             c.KeyManager.Bits,
+		RotationInterval: time.Duration(c.KeyManager.RotationInterval) * time.Second,
+		GracePeriod:      time.Duration(c.KeyManager.GracePeriod) * time.Second,
+		TokenExpireSecs:  c.Auth.AccessExpire,
+	}
+
+	var keyManager *utils.RSAKeyManager
+	var err error
+	if c.Auth.AccessPrivateKeyPEM != "" {
+		// 从配置的私钥 PEM 加载
+		keyManager, err = utils.NewRSAKeyManagerFromPEM(c.Auth.AccessPrivateKeyPEM, c.Auth.KeyID, keyManagerCfg)
+	} else {
+		// 使用配置创建新的密钥管理器
+		keyManager, err = utils.NewRSAKeyManagerWithConfig(keyManagerCfg)
+	}
+	if err != nil {
+		panic(fmt.Sprintf("初始化 RSA 密钥管理器失败: %v", err))
+	}
+
+	// 启动自动密钥轮换
+	stopFunc, err := keyManager.AutoRotate(context.Background())
+	if err != nil {
+		panic(fmt.Sprintf("启动自动密钥轮换失败: %v", err))
+	}
+
 	// 返回上下文
 	return &ServiceContext{
 		Config: c,
@@ -72,5 +104,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RefreshTokenLimit:   middleware.NewRefreshTokenLimitMiddleware(tokenLimiterMgr),
 		ChangePasswordLimit: middleware.NewChangePasswordLimitMiddleware(periodLimiterMgr),
 		CookieSetter:        middleware.NewCookieSetterMiddleware(c),
+		JWKSCacheControl:    middleware.NewJWKSCacheControlMiddleware(c.JWKS).Handle,
+		KeyManager:          keyManager,
+		KeyManagerStopFunc:  stopFunc,
 	}
 }

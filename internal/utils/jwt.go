@@ -2,9 +2,15 @@ package utils
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -231,4 +237,290 @@ func RefreshTokenFromContext(ctx context.Context) (*RefreshToken, error) {
 	return &RefreshToken{
 		JwtClaims: *claims,
 	}, nil
+}
+
+// ==================== RSA 非对称加密支持 ====================
+
+// JWKS JSON Web Key Set 结构
+type JWKS struct {
+	Keys []JWK `json:"keys"`
+}
+
+// JWK JSON Web Key 结构
+type JWK struct {
+	Kty string `json:"kty"` // 密钥类型，RSA
+	Kid string `json:"kid"` // 密钥标识符
+	Use string `json:"use"` // 用途，sig 表示签名
+	N   string `json:"n"`   // RSA 模数 (base64url 编码)
+	E   string `json:"e"`   // RSA 指数 (base64url 编码)
+	Alg string `json:"alg"` // 算法，RS256
+}
+
+// RSAKeyPair RSA 密钥对
+type RSAKeyPair struct {
+	PrivateKey *rsa.PrivateKey
+	PublicKey  *rsa.PublicKey
+	KeyID      string // 密钥标识符，用于 JWKS 中的 kid
+}
+
+// GenerateRSAKeyPair 生成 RSA 密钥对
+func GenerateRSAKeyPair(bits int) (*RSAKeyPair, error) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, bits)
+	if err != nil {
+		return nil, fmt.Errorf("generate rsa key pair failed: %w", err)
+	}
+
+	// 生成 key ID (使用时间戳和随机数)
+	timestamp := time.Now().Unix()
+	randNum, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+	keyID := fmt.Sprintf("key-%d-%s", timestamp, randNum.String())
+
+	return &RSAKeyPair{
+		PrivateKey: privateKey,
+		PublicKey:  &privateKey.PublicKey,
+		KeyID:      keyID,
+	}, nil
+}
+
+// PrivateKeyToPEM 将 RSA 私钥转换为 PEM 格式
+func PrivateKeyToPEM(privateKey *rsa.PrivateKey) string {
+	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: privateKeyBytes,
+	})
+	return string(privateKeyPEM)
+}
+
+// PublicKeyToPEM 将 RSA 公钥转换为 PEM 格式
+func PublicKeyToPEM(publicKey *rsa.PublicKey) (string, error) {
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return "", fmt.Errorf("marshal public key failed: %w", err)
+	}
+	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicKeyBytes,
+	})
+	return string(publicKeyPEM), nil
+}
+
+// ParseRSAPrivateKeyFromPEM 从 PEM 格式解析 RSA 私钥
+func ParseRSAPrivateKeyFromPEM(pemString string) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(pemString))
+	if block == nil {
+		return nil, fmt.Errorf("failed to parse PEM block")
+	}
+
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		// 尝试解析 PKCS8 格式
+		key, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err2 != nil {
+			return nil, fmt.Errorf("parse private key failed: %w", err)
+		}
+		var ok bool
+		privateKey, ok = key.(*rsa.PrivateKey)
+		if !ok {
+			return nil, fmt.Errorf("not an RSA private key")
+		}
+	}
+
+	return privateKey, nil
+}
+
+// ParseRSAPublicKeyFromPEM 从 PEM 格式解析 RSA 公钥
+func ParseRSAPublicKeyFromPEM(pemString string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pemString))
+	if block == nil {
+		return nil, fmt.Errorf("failed to parse PEM block")
+	}
+
+	publicKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse public key failed: %w", err)
+	}
+
+	publicKey, ok := publicKeyInterface.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("not an RSA public key")
+	}
+
+	return publicKey, nil
+}
+
+// ToJWK 将 RSA 公钥转换为 JWK 格式
+func (kp *RSAKeyPair) ToJWK() JWK {
+	// 将模数 N 转换为 base64url 编码
+	nBytes := kp.PublicKey.N.Bytes()
+	nBase64 := base64.RawURLEncoding.EncodeToString(nBytes)
+
+	// 将指数 E 转换为 base64url 编码
+	eBytes := big.NewInt(int64(kp.PublicKey.E)).Bytes()
+	eBase64 := base64.RawURLEncoding.EncodeToString(eBytes)
+
+	return JWK{
+		Kty: "RSA",
+		Kid: kp.KeyID,
+		Use: "sig",
+		N:   nBase64,
+		E:   eBase64,
+		Alg: "RS256",
+	}
+}
+
+// ToJWKS 返回 JWKS 格式（供网关获取）
+func (kp *RSAKeyPair) ToJWKS() JWKS {
+	return JWKS{
+		Keys: []JWK{kp.ToJWK()},
+	}
+}
+
+// ToJSON 将 JWKS 转换为 JSON 字符串
+func (jwks JWKS) ToJSON() (string, error) {
+	jsonBytes, err := json.MarshalIndent(jwks, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal JWKS failed: %w", err)
+	}
+	return string(jsonBytes), nil
+}
+
+// ToJWKSJSON 返回 JWKS 的 JSON 字符串
+func (kp *RSAKeyPair) ToJWKSJSON() (string, error) {
+	jwks := kp.ToJWKS()
+	jsonBytes, err := json.MarshalIndent(jwks, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal JWKS failed: %w", err)
+	}
+	return string(jsonBytes), nil
+}
+
+// ==================== RS256 Token 生成（非对称加密）====================
+
+// GenerateAccessTokenWithRSA 使用 RSA 私钥生成 Access Token
+func GenerateAccessTokenWithRSA(privateKey *rsa.PrivateKey, keyID string, expireSeconds int64, uid int64, nickname, email string) (string, error) {
+	now := time.Now()
+	claims := AccessToken{
+		Nickname: nickname,
+		Email:    email,
+		JwtClaims: JwtClaims{
+			Uid:       json.Number(strconv.FormatInt(uid, 10)),
+			TokenType: accessTokenType,
+			Iat:       now.Unix(),
+			Exp:       now.Add(time.Duration(expireSeconds) * time.Second).Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	if keyID != "" {
+		token.Header["kid"] = keyID
+	}
+	return token.SignedString(privateKey)
+}
+
+// GenerateRefreshTokenWithRSA 使用 RSA 私钥生成 Refresh Token
+func GenerateRefreshTokenWithRSA(privateKey *rsa.PrivateKey, keyID string, expireSeconds int64, uid int64) (string, error) {
+	now := time.Now()
+	claims := RefreshToken{
+		JwtClaims: JwtClaims{
+			Uid:       json.Number(strconv.FormatInt(uid, 10)),
+			TokenType: refreshTokenType,
+			Iat:       now.Unix(),
+			Exp:       now.Add(time.Duration(expireSeconds) * time.Second).Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	if keyID != "" {
+		token.Header["kid"] = keyID
+	}
+	return token.SignedString(privateKey)
+}
+
+// ==================== RS256 Token 解析（非对称加密，网关使用）====================
+
+// ParseAccessTokenWithRSA 使用 RSA 公钥解析 Access Token
+func ParseAccessTokenWithRSA(tokenString string, publicKey *rsa.PublicKey) (*AccessToken, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &AccessToken{}, func(t *jwt.Token) (interface{}, error) {
+		// 验证算法
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return publicKey, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("parse access token failed: %w", err)
+	}
+	claims, ok := token.Claims.(*AccessToken)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid access token claims")
+	}
+	return claims, nil
+}
+
+// ParseRefreshTokenWithRSA 使用 RSA 公钥解析 Refresh Token
+func ParseRefreshTokenWithRSA(tokenString string, publicKey *rsa.PublicKey) (*RefreshToken, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &RefreshToken{}, func(t *jwt.Token) (interface{}, error) {
+		// 验证算法
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return publicKey, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("parse refresh token failed: %w", err)
+	}
+	claims, ok := token.Claims.(*RefreshToken)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid refresh token claims")
+	}
+	return claims, nil
+}
+
+// ParseAccessTokenUnverified 解析 Access Token（不验证签名）
+// 用于 user 服务解析网关已校验的 Token
+func ParseAccessTokenUnverified(tokenString string) (*AccessToken, error) {
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &AccessToken{})
+	if err != nil {
+		return nil, fmt.Errorf("parse access token unverified failed: %w", err)
+	}
+	claims, ok := token.Claims.(*AccessToken)
+	if !ok {
+		return nil, errors.New("invalid access token claims")
+	}
+	return claims, nil
+}
+
+// ParseRefreshTokenUnverified 解析 Refresh Token（不验证签名）
+// 用于 user 服务解析网关已校验的 Token
+func ParseRefreshTokenUnverified(tokenString string) (*RefreshToken, error) {
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &RefreshToken{})
+	if err != nil {
+		return nil, fmt.Errorf("parse refresh token unverified failed: %w", err)
+	}
+	claims, ok := token.Claims.(*RefreshToken)
+	if !ok {
+		return nil, errors.New("invalid refresh token claims")
+	}
+	return claims, nil
+}
+
+// InitJWKSFromPEM 从公钥 PEM 字符串初始化 JWKS
+// 用于 ServiceContext 初始化时加载公钥
+func InitJWKSFromPEM(publicKeyPEM, keyID string) (JWKS, error) {
+	// 如果配置了公钥 PEM，则解析并生成 JWKS
+	if publicKeyPEM != "" {
+		publicKey, err := ParseRSAPublicKeyFromPEM(publicKeyPEM)
+		if err != nil {
+			return JWKS{}, fmt.Errorf("parse RSA public key failed: %w", err)
+		}
+
+		// 创建临时 RSAKeyPair 来生成 JWK
+		keyPair := &RSAKeyPair{
+			PublicKey: publicKey,
+			KeyID:     keyID,
+		}
+		return keyPair.ToJWKS(), nil
+	}
+
+	// 如果没有配置公钥，返回空的 JWKS
+	return JWKS{Keys: []JWK{}}, nil
 }

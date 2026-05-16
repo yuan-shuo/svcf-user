@@ -38,8 +38,8 @@ func (l *RefreshTokenLogic) RefreshToken(req *types.RefreshTokenReq) (resp *type
 		return nil, errs.New(errs.CodeUnauthorized)
 	}
 
-	// 获取用户实例
-	user, err := userutils.GetUserByRefreshToken(l.ctx, l.svcCtx.UsersModel, refreshToken, l.svcCtx.Config.RefreshSecret)
+	// 使用 KeyManager 获取用户实例（支持 RS256）
+	user, err := userutils.GetUserByRefreshTokenWithKeyManager(l.ctx, l.svcCtx.UsersModel, refreshToken, l.svcCtx.KeyManager)
 	if err != nil {
 		// 根据错误类型判断具体失败原因
 		if codeErr, ok := errs.IsCodeError(err); ok {
@@ -59,13 +59,13 @@ func (l *RefreshTokenLogic) RefreshToken(req *types.RefreshTokenReq) (resp *type
 		return nil, err
 	}
 
-	// 重新签发新token
-	newAccess, err := userutils.GenerateAccessToken(l.ctx, l.svcCtx.Config, user)
+	// 使用 RSA 重新签发新 token（RS256）
+	newAccess, err := userutils.GenerateAccessTokenWithKeyManager(l.ctx, l.svcCtx.KeyManager, user)
 	if err != nil {
 		l.svcCtx.Metrics.TokenRefreshTotal.Inc(metrics.TokenRefreshTotalStatusFailedInvalid)
 		return nil, err
 	}
-	newRefresh, err := userutils.GenerateRefreshToken(l.ctx, l.svcCtx.Config, user)
+	newRefresh, err := userutils.GenerateRefreshTokenWithKeyManager(l.ctx, l.svcCtx.KeyManager, l.svcCtx.Config.RefreshExpire, user)
 	if err != nil {
 		l.svcCtx.Metrics.TokenRefreshTotal.Inc(metrics.TokenRefreshTotalStatusFailedInvalid)
 		return nil, err

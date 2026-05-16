@@ -33,10 +33,18 @@ func TestRefreshTokenLogic_RefreshToken_Success(t *testing.T) {
 		Nickname:    nickname,
 	}
 
-	// 生成有效的 refresh token
-	refreshSecret := "test-refresh-secret"
+	// 创建 RSA KeyManager
 	refreshExpire := int64(7200)
-	refreshToken, err := utils.GenerateRefreshToken(refreshSecret, refreshExpire, uid)
+	keyManager, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+
+	// 生成有效的 refresh token（使用 RSA）
+	refreshToken, err := utils.GenerateRefreshTokenWithRSA(
+		keyManager.GetCurrentPrivateKey(),
+		keyManager.GetCurrentKeyID(),
+		refreshExpire,
+		uid,
+	)
 	assert.NoError(t, err)
 
 	// 将 refresh token 放入 context（模拟中间件从 Cookie 读取）
@@ -49,13 +57,12 @@ func TestRefreshTokenLogic_RefreshToken_Success(t *testing.T) {
 		UsersModel: mockUsersModel,
 		Config: config.Config{
 			Auth: config.Auth{
-				AccessSecret: "test-access-secret",
 				AccessExpire: 3600,
 			},
-			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
-		Metrics: mock.GetTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
+		KeyManager: keyManager,
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -73,9 +80,14 @@ func TestRefreshTokenLogic_RefreshToken_Success(t *testing.T) {
 func TestRefreshTokenLogic_RefreshToken_NoTokenInContext(t *testing.T) {
 	ctx := context.Background()
 
+	// 创建 RSA KeyManager
+	keyManager, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+
 	svcCtx := &svc.ServiceContext{
-		Config:  config.Config{},
-		Metrics: mock.GetTestMetrics(),
+		Config:     config.Config{},
+		Metrics:    mock.GetTestMetrics(),
+		KeyManager: keyManager,
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -91,11 +103,14 @@ func TestRefreshTokenLogic_RefreshToken_NoTokenInContext(t *testing.T) {
 func TestRefreshTokenLogic_RefreshToken_InvalidToken(t *testing.T) {
 	ctx := context.Background()
 
+	// 创建 RSA KeyManager
+	keyManager, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+
 	svcCtx := &svc.ServiceContext{
-		Config: config.Config{
-			RefreshSecret: "test-refresh-secret",
-		},
-		Metrics: mock.GetTestMetrics(),
+		Config:     config.Config{},
+		Metrics:    mock.GetTestMetrics(),
+		KeyManager: keyManager,
 	}
 
 	// 将无效 token 放入 context
@@ -111,22 +126,33 @@ func TestRefreshTokenLogic_RefreshToken_InvalidToken(t *testing.T) {
 	assert.True(t, mock.IsCodeError(err, errs.CodeInvalidToken))
 }
 
-func TestRefreshTokenLogic_RefreshToken_WrongSecret(t *testing.T) {
+func TestRefreshTokenLogic_RefreshToken_WrongKey(t *testing.T) {
 	ctx := context.Background()
 
-	// 用错误的 secret 生成 token
+	// 创建两个不同的 KeyManager（模拟密钥轮换后的情况）
+	keyManager1, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+	keyManager2, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+
+	// 用 keyManager1 生成 token
 	uid := int64(12345)
-	wrongToken, err := utils.GenerateRefreshToken("wrong-secret", 7200, uid)
+	wrongToken, err := utils.GenerateRefreshTokenWithRSA(
+		keyManager1.GetCurrentPrivateKey(),
+		keyManager1.GetCurrentKeyID(),
+		7200,
+		uid,
+	)
 	assert.NoError(t, err)
 
 	// 将 token 放入 context
 	ctx = context.WithValue(ctx, middleware.RefreshTokenKey{}, wrongToken)
 
+	// 但验证时使用 keyManager2（不同的密钥）
 	svcCtx := &svc.ServiceContext{
-		Config: config.Config{
-			RefreshSecret: "correct-secret", // 使用不同的 secret
-		},
-		Metrics: mock.GetTestMetrics(),
+		Config:     config.Config{},
+		Metrics:    mock.GetTestMetrics(),
+		KeyManager: keyManager2,
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -143,30 +169,37 @@ func TestRefreshTokenLogic_RefreshToken_UserNotFound(t *testing.T) {
 	ctx := context.Background()
 	mockUsersModel := new(mock.UsersModel)
 
+	// 创建 RSA KeyManager
+	keyManager, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+
 	// 生成有效的 refresh token
 	uid := int64(99999)
-	refreshSecret := "test-refresh-secret"
 	refreshExpire := int64(7200)
-	refreshToken, err := utils.GenerateRefreshToken(refreshSecret, refreshExpire, uid)
+	refreshToken, err := utils.GenerateRefreshTokenWithRSA(
+		keyManager.GetCurrentPrivateKey(),
+		keyManager.GetCurrentKeyID(),
+		refreshExpire,
+		uid,
+	)
 	assert.NoError(t, err)
 
 	// 将 token 放入 context
 	ctx = context.WithValue(ctx, middleware.RefreshTokenKey{}, refreshToken)
 
-	// 设置 mock 期望：用户不存在（使用 model.ErrNotFound 触发 GetUserByUid 中的错误转换）
+	// 设置 mock 期望：用户不存在
 	mockUsersModel.On("FindOneBySnowflakeId", ctx, uid).Return(nil, sqlx.ErrNotFound)
 
 	svcCtx := &svc.ServiceContext{
 		UsersModel: mockUsersModel,
 		Config: config.Config{
 			Auth: config.Auth{
-				AccessSecret: "test-access-secret",
 				AccessExpire: 3600,
 			},
-			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
-		Metrics: mock.GetTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
+		KeyManager: keyManager,
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
@@ -196,10 +229,18 @@ func TestRefreshTokenLogic_RefreshToken_WithCookieSetter(t *testing.T) {
 		Nickname:    nickname,
 	}
 
+	// 创建 RSA KeyManager
+	keyManager, err := mock.NewTestKeyManager()
+	assert.NoError(t, err)
+
 	// 生成有效的 refresh token
-	refreshSecret := "test-refresh-secret"
 	refreshExpire := int64(7200)
-	refreshToken, err := utils.GenerateRefreshToken(refreshSecret, refreshExpire, uid)
+	refreshToken, err := utils.GenerateRefreshTokenWithRSA(
+		keyManager.GetCurrentPrivateKey(),
+		keyManager.GetCurrentKeyID(),
+		refreshExpire,
+		uid,
+	)
 	assert.NoError(t, err)
 
 	// 将 refresh token 放入 context
@@ -216,13 +257,12 @@ func TestRefreshTokenLogic_RefreshToken_WithCookieSetter(t *testing.T) {
 		UsersModel: mockUsersModel,
 		Config: config.Config{
 			Auth: config.Auth{
-				AccessSecret: "test-access-secret",
 				AccessExpire: 3600,
 			},
-			RefreshSecret: refreshSecret,
 			RefreshExpire: refreshExpire,
 		},
-		Metrics: mock.GetTestMetrics(),
+		Metrics:    mock.GetTestMetrics(),
+		KeyManager: keyManager,
 	}
 
 	logic := NewRefreshTokenLogic(ctx, svcCtx)
