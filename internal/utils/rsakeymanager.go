@@ -268,16 +268,18 @@ func (m *RSAKeyManager) GetKeyInfo() map[string]interface{} {
 // 返回停止函数，调用可停止自动轮换
 func (m *RSAKeyManager) AutoRotate(ctx context.Context) (func(), error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	// 如果已经在运行，返回错误
 	if m.isRunning {
+		m.mu.Unlock()
 		return nil, ErrKeyAlreadyExists
 	}
 
 	m.isRunning = true
 	// 创建新的停止通道（确保之前的通道已被关闭）
 	m.stopChan = make(chan struct{})
+	stopChan := m.stopChan // 保存到局部变量，避免竞态
+	m.mu.Unlock()
 
 	// 启动定时轮换
 	ticker := time.NewTicker(m.config.RotationInterval)
@@ -298,7 +300,7 @@ func (m *RSAKeyManager) AutoRotate(ctx context.Context) (func(), error) {
 					time.Sleep(m.config.GracePeriod)
 					m.clearPreviousIfNotChanged()
 				}()
-			case <-m.stopChan:
+			case <-stopChan:
 				return
 			}
 		}
